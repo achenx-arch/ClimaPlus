@@ -1,0 +1,182 @@
+@startuml arquitectura-climaplus
+' =====================================================================
+'  ClimaPlus – Panel de clima y alertas ambientales
+'  Diagrama de arquitectura general – FASE 1
+'  Curso: Desarrollo Web
+'  Estado: aprobado (decisiones D-01 a D-13)
+' =====================================================================
+
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam packageStyle rectangle
+skinparam roundCorner 8
+skinparam nodesep 40
+skinparam ranksep 70
+skinparam ArrowColor #37474F
+skinparam ArrowFontSize 10
+
+skinparam package {
+  BorderColor #546E7A
+  FontStyle bold
+}
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #455A64
+}
+
+title ClimaPlus – Arquitectura general del sistema (Fase 1)
+
+' ---------------------------------------------------------------------
+'  ACTORES
+' ---------------------------------------------------------------------
+actor "Usuario\n(rol USUARIO o\nADMINISTRADOR)" as usuario
+
+' ---------------------------------------------------------------------
+'  FRONTEND
+' ---------------------------------------------------------------------
+package "FRONTEND" as pkgFront #E3F2FD {
+  component react [
+    <b>Frontend React</b>
+    React + TypeScript + Bootstrap
+    ----
+    Vistas: login, registro, clima,
+    pronóstico, favoritos, historial,
+    alertas, panel de administración
+    ----
+    Cliente HTTP hacia la Web API
+    (envía JWT cuando hay sesión)
+  ]
+}
+
+' ---------------------------------------------------------------------
+'  HARDWARE
+' ---------------------------------------------------------------------
+package "HARDWARE (fase posterior)" as pkgHw #FFF8E1 {
+  node esp32 [
+    <b>ESP32</b>
+    ----
+    BME280: temperatura / humedad
+    Sensor de lluvia · LDR (luz)
+    OLED · LED RGB · buzzer · botón
+    ----
+    Envía lecturas por HTTP/JSON
+    autenticado con API Key
+  ]
+}
+
+' ---------------------------------------------------------------------
+'  BACKEND
+' ---------------------------------------------------------------------
+package "BACKEND – ASP.NET Core Web API" as pkgBack #E8F5E9 {
+
+  component seguridad [
+    <b>Seguridad</b>
+    ----
+    Autenticación JWT Bearer propia
+    (PasswordHasher para contraseñas)
+    Endpoints públicos: búsqueda,
+    clima actual y pronóstico
+    Autorización por rol
+    (USUARIO / ADMINISTRADOR)
+    Validación de API Key (dispositivos)
+    Rechazo de usuarios inactivos
+  ]
+
+  component controllers [
+    <b>Controllers</b>
+    ----
+    AuthController
+    ClimaController
+    FavoritosController
+    HistorialController
+    AlertasController
+    DispositivosController
+    LecturasController (ESP32)
+    AdminController
+  ]
+
+  component services [
+    <b>Services (lógica de negocio)</b>
+    ----
+    AuthService · ClimaService
+    UbicacionService · FavoritoService
+    HistorialService · AlertaService
+    DispositivoService · LecturaService
+    EstadisticaService
+    ----
+    Validación y normalización de datos
+    Registro de historial (ACTUAL / PRONÓSTICO)
+    Evaluación de umbrales y anti-duplicado (1 h)
+  ]
+
+  component owClient [
+    <b>Cliente OpenWeather</b>
+    HttpClient tipado
+    ----
+    Geocodificación, clima actual
+    y pronóstico; mapeo a DTO propio
+  ]
+
+  component efcore [
+    <b>Entity Framework Core</b>
+    ----
+    AppDbContext
+    Proveedor Npgsql
+  ]
+}
+
+' ---------------------------------------------------------------------
+'  DATOS
+' ---------------------------------------------------------------------
+package "DATOS" as pkgDatos #F3E5F5 {
+  database postgres [
+    <b>PostgreSQL</b>
+    ----
+    usuario · ubicacion · favorito
+    consulta_clima · configuracion_alerta
+    alerta · dispositivo · lectura_sensor
+  ]
+}
+
+' ---------------------------------------------------------------------
+'  SERVICIOS EXTERNOS
+' ---------------------------------------------------------------------
+package "SERVICIOS EXTERNOS" as pkgExt #FFEBEE {
+  cloud openweather [
+    <b>OpenWeather API</b>
+    ----
+    Geocoding API
+    Current Weather API
+    5 day / 3 hour Forecast API
+  ]
+}
+
+' ---------------------------------------------------------------------
+'  COMUNICACIONES PERMITIDAS
+' ---------------------------------------------------------------------
+usuario     --> react       : interactúa\n(navegador web)
+react       --> seguridad   : HTTPS · JSON\nBearer JWT (si hay sesión)
+esp32       --> seguridad   : HTTP/JSON\nencabezado X-Device-Key
+seguridad   --> controllers : petición autenticada\ny autorizada
+controllers --> services    : DTO validado
+services    --> efcore      : entidades / LINQ
+services    --> owClient    : solicitud de datos\nmeteorológicos
+efcore      --> postgres    : SQL vía Npgsql
+owClient    --> openweather : HTTPS · JSON\nAPI Key del servidor
+
+' Orden visual: frontend arriba, hardware abajo; datos arriba, externos abajo
+react    -[hidden]right- esp32
+postgres -[hidden]right- openweather
+
+legend bottom
+  <b>Reglas de comunicación</b>
+  • El frontend NO consume OpenWeather ni PostgreSQL: todo pasa por la Web API.
+  • El ESP32 NO accede a PostgreSQL ni depende de OpenWeather: solo envía lecturas a la Web API.
+  • La API Key de OpenWeather vive únicamente en la configuración del backend.
+  • Solo Entity Framework Core accede a PostgreSQL.
+  • Clima y pronóstico son públicos; favoritos, historial, alertas y dispositivos requieren sesión.
+endlegend
+
+@enduml

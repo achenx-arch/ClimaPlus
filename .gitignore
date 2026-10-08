@@ -1,0 +1,49 @@
+# =========================================================
+#  ClimaPlus – .gitignore
+#  Cubre los entornos previstos: .NET, Node/React, ESP32,
+#  editores y sistema operativo.
+# =========================================================
+
+# ---------- Secretos y configuración local ----------
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+*.secrets.json
+
+# ---------- .NET / ASP.NET Core ----------
+bin/
+obj/
+*.user
+*.suo
+*.rsuser
+*.userprefs
+.vs/
+TestResults/
+*.log
+
+# ---------- Node / React ----------
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- ESP32 (PlatformIO / Arduino) ----------
+.pio/
+hardware/esp32/**/secrets.h
+
+# ---------- Editores ----------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# ---------- Sistema operativo ----------
+.DS_Store
+Thumbs.db
+desktop.ini
