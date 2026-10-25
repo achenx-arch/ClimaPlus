@@ -1,0 +1,6 @@
+@ClimaPlus.Api_HostAddress = http://localhost:5208
+
+GET {{ClimaPlus.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
