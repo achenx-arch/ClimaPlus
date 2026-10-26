@@ -1,0 +1,26 @@
+using ClimaPlus.Api.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace ClimaPlus.Api.Controllers;
+
+/// <summary>Utilidades comunes: IP del cliente y traducción de errores de servicio a ProblemDetails.</summary>
+public abstract class ClimaPlusControllerBase : ControllerBase
+{
+    protected string IpCliente => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "desconocida";
+
+    protected IActionResult RespuestaError(ErrorServicio error) => error.Tipo switch
+    {
+        TipoError.Validacion => ErrorDeCampo(error, StatusCodes.Status400BadRequest, "Datos inválidos"),
+        TipoError.Conflicto => ErrorDeCampo(error, StatusCodes.Status409Conflict, "Conflicto"),
+        TipoError.CredencialesInvalidas => Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Credenciales inválidas", detail: error.Mensaje),
+        TipoError.CuentaDesactivada => Problem(statusCode: StatusCodes.Status403Forbidden, title: "Cuenta desactivada", detail: error.Mensaje),
+        TipoError.NoEncontrado => Problem(statusCode: StatusCodes.Status404NotFound, title: "No encontrado", detail: error.Mensaje),
+        _ => Problem(statusCode: StatusCodes.Status500InternalServerError),
+    };
+
+    private IActionResult ErrorDeCampo(ErrorServicio error, int estado, string titulo)
+    {
+        ModelState.AddModelError(error.Campo ?? string.Empty, error.Mensaje);
+        return ValidationProblem(detail: error.Mensaje, statusCode: estado, title: titulo, modelStateDictionary: ModelState);
+    }
+}

@@ -14,6 +14,9 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- Fija Relational en la misma versión que EF Core (8.0.22). Npgsql 8.0.11 solo pide >= 8.0.11;
+         sin esta línea, el proyecto de pruebas resolvía 8.0.11 y producía MSB3277. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.22" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>

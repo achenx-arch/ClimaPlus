@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClimaPlus.Api", "ClimaPlus.Api\ClimaPlus.Api.csproj", "{F128AFE7-E31E-4B11-A843-7E58345AFCE0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClimaPlus.Api.Tests", "ClimaPlus.Api.Tests\ClimaPlus.Api.Tests.csproj", "{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,18 @@ Global
 		{F128AFE7-E31E-4B11-A843-7E58345AFCE0}.Release|x64.Build.0 = Release|Any CPU
 		{F128AFE7-E31E-4B11-A843-7E58345AFCE0}.Release|x86.ActiveCfg = Release|Any CPU
 		{F128AFE7-E31E-4B11-A843-7E58345AFCE0}.Release|x86.Build.0 = Release|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Debug|x64.Build.0 = Debug|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Debug|x86.Build.0 = Debug|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Release|x64.ActiveCfg = Release|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Release|x64.Build.0 = Release|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Release|x86.ActiveCfg = Release|Any CPU
+		{6F725F99-87D5-4CED-BFFB-6FDF17D15AC8}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
