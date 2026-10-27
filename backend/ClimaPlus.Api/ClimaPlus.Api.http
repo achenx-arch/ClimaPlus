@@ -1,6 +1,67 @@
+# ClimaPlus API – Fase 2D (autenticación y perfil)
+# Datos de ejemplo: NO usar credenciales reales en este archivo.
+# 1) Ejecuta "Registrar", 2) "Iniciar sesión", 3) copia el token en @token.
+
 @ClimaPlus.Api_HostAddress = http://localhost:5208
+@token = PEGA_AQUI_EL_TOKEN
 
-GET {{ClimaPlus.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Registrar
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/register
+Content-Type: application/json
 
-###
+{
+  "nombre": "Ana López",
+  "correo": "ana.lopez@ejemplo.com",
+  "password": "Ejemplo2026"
+}
+
+### Iniciar sesión
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "ana.lopez@ejemplo.com",
+  "password": "Ejemplo2026"
+}
+
+### Sesión actual
+GET {{ClimaPlus.Api_HostAddress}}/api/auth/me
+Authorization: Bearer {{token}}
+
+### Ver perfil (M16/M17)
+GET {{ClimaPlus.Api_HostAddress}}/api/usuarios/me
+Authorization: Bearer {{token}}
+
+### Actualizar perfil
+PUT {{ClimaPlus.Api_HostAddress}}/api/usuarios/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Ana María López",
+  "correo": "ana.lopez@ejemplo.com"
+}
+
+### Intento de cambiar el rol (debe responder 400)
+PUT {{ClimaPlus.Api_HostAddress}}/api/usuarios/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Ana López",
+  "correo": "ana.lopez@ejemplo.com",
+  "rol": "ADMINISTRADOR"
+}
+
+### Cambiar contraseña
+PUT {{ClimaPlus.Api_HostAddress}}/api/usuarios/me/password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "passwordActual": "Ejemplo2026",
+  "passwordNueva": "NuevaClave2026"
+}
+
+### Sin token (debe responder 401)
+GET {{ClimaPlus.Api_HostAddress}}/api/usuarios/me
