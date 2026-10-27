@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  font-family: 'Manrope', sans-serif;
+  color: #17324d;
+  background-color: #f4f8fb;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #f4f8fb;
+  color: #17324d;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #17324d;
+  font-weight: 800;
+}
+
+a {
+  text-decoration: none;
+}
+
+.btn-primary {
+  background-color: #075d89;
+  border-color: #075d89;
+  border-radius: 9px;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background-color: #034b70;
+  border-color: #034b70;
+}
+
+.navbar {
+  background-color: #ffffff;
+}
+
+.navbar-brand {
+  font-weight: 800;
+}
+
+.nav-link {
+  color: #526b82;
+  font-weight: 600;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  color: #075d89;
+}
+
+.card {
+  border: 1px solid #e1eaf2;
+  border-radius: 14px;
+}
+
+.form-control {
+  border-radius: 9px;
+  border-color: #dce6ef;
+}
+
+.form-control:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 0.2rem rgba(56, 189, 248, 0.15);
+}
