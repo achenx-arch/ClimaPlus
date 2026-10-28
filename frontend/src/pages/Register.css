@@ -1,0 +1,316 @@
+/* REGISTRO - CLIMAPLUS */
+
+.register-page {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+  background: #ffffff;
+}
+
+/* PANEL IZQUIERDO */
+
+.register-left {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 42px 60px;
+  background: #075b85;
+  color: #ffffff;
+  overflow: hidden;
+}
+
+.register-left::before {
+  content: "";
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  top: -130px;
+  right: -120px;
+}
+
+.register-left::after {
+  content: "";
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  bottom: -170px;
+  left: -120px;
+}
+
+.register-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 23px;
+  font-weight: 700;
+  z-index: 1;
+}
+
+.register-brand:hover {
+  color: #ffffff;
+}
+
+.register-brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 43px;
+  height: 43px;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #075b85;
+  font-size: 23px;
+}
+
+.register-brand-plus {
+  color: #ffc02e;
+}
+
+.register-left-content {
+  position: relative;
+  z-index: 1;
+  max-width: 470px;
+}
+
+.register-weather-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 65px;
+  height: 65px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffc02e;
+  font-size: 32px;
+  margin-bottom: 25px;
+}
+
+.register-left-content h1 {
+  font-size: clamp(28px, 3vw, 39px);
+  font-weight: 750;
+  color: #ffffff;
+  margin-bottom: 20px;
+}
+
+.register-left-content p {
+  color: #b9d2df;
+  font-size: 17px;
+  line-height: 1.8;
+}
+
+.register-footer {
+  display: flex;
+  gap: 12px;
+  color: #a9c6d5;
+  font-size: 13px;
+  z-index: 1;
+}
+
+/* PANEL DERECHO */
+
+.register-right {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 90px 35px;
+}
+
+.register-top-link {
+  position: absolute;
+  top: 35px;
+  right: 45px;
+  font-size: 14px;
+  color: #7b91a6;
+}
+
+.register-top-link a,
+.register-bottom-text a {
+  color: #075b85;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.register-form-container {
+  width: 100%;
+  max-width: 440px;
+}
+
+.register-form-container h2 {
+  font-size: 34px;
+  font-weight: 750;
+  color: #16324f;
+  margin-bottom: 8px;
+}
+
+.register-subtitle {
+  color: #8396aa;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+.register-field {
+  margin-bottom: 20px;
+}
+
+.register-field label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #243e57;
+  margin-bottom: 9px;
+}
+
+.register-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #dce5ee;
+  border-radius: 10px;
+  padding: 0 15px;
+  height: 49px;
+  background: #ffffff;
+}
+
+.register-input-wrapper:focus-within {
+  border-color: #075b85;
+  box-shadow: 0 0 0 3px rgba(7, 91, 133, 0.1);
+}
+
+.register-input-wrapper > i {
+  color: #91a8bc;
+  font-size: 17px;
+}
+
+.register-input-wrapper input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #16324f;
+  font-size: 14px;
+}
+
+.register-input-wrapper input::placeholder {
+  color: #a0b0c0;
+}
+
+.register-toggle-password {
+  border: none;
+  background: transparent;
+  color: #91a8bc;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.register-terms-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 22px 0;
+  color: #7890a4;
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.register-terms-checkbox input {
+  margin-top: 4px;
+  accent-color: #075b85;
+}
+
+.register-error {
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background: #fff0f0;
+  color: #b42318;
+  font-size: 13px;
+}
+
+.register-submit {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 50px;
+  border: none;
+  border-radius: 9px;
+  background: #075b85;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 5px 12px rgba(7, 91, 133, 0.2);
+  transition: background 0.2s;
+}
+
+.register-submit:hover {
+  background: #06496c;
+}
+
+.register-bottom-text {
+  margin-top: 25px;
+  text-align: center;
+  color: #8396aa;
+  font-size: 14px;
+}
+
+/* DISEÑO RESPONSIVE */
+
+@media (max-width: 768px) {
+  .register-page {
+    grid-template-columns: 1fr;
+  }
+
+  .register-left {
+    min-height: 230px;
+    padding: 25px;
+  }
+
+  .register-left-content {
+    margin-top: 35px;
+  }
+
+  .register-left-content h1 {
+    font-size: 27px;
+  }
+
+  .register-left-content p {
+    font-size: 14px;
+  }
+
+  .register-weather-icon,
+  .register-footer {
+    display: none;
+  }
+
+  .register-right {
+    padding: 95px 24px 50px;
+    align-items: flex-start;
+  }
+
+  .register-top-link {
+    top: 30px;
+    right: 24px;
+  }
+
+  .register-form-container h2 {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 400px) {
+  .register-left {
+    padding: 22px;
+  }
+}
