@@ -1,6 +1,40 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from "react-router-dom";
 
 function Navbar() {
+  const location = useLocation();
+
+  // Identificar las pantallas administrativas
+  const esAdministrador = location.pathname.startsWith("/admin");
+
+  // Identificar las pantallas privadas del usuario
+  const rutasUsuario = [
+    "/dashboard",
+    "/favoritos",
+    "/historial",
+    "/alertas",
+    "/configuracion-alertas",
+    "/dispositivos",
+    "/perfil",
+  ];
+
+  const esUsuario =
+    rutasUsuario.some(
+      (ruta) =>
+        location.pathname === ruta ||
+        location.pathname.startsWith(`${ruta}/`)
+    );
+
+  // Temporal: después se obtendrá de la sesión real
+  const sesionDemostracion = esAdministrador || esUsuario;
+
+  const nombreUsuario = esAdministrador
+    ? "Administrador"
+    : "Amilcar Chen";
+
+  const rutaPerfil = esAdministrador
+    ? "/admin/perfil"
+    : "/perfil";
+
   return (
     <nav className="navbar navbar-expand-lg bg-white border-bottom">
       <div className="container py-2">
@@ -10,11 +44,11 @@ function Navbar() {
             <i className="bi bi-cloud"></i>
           </span>
 
-          <span style={{ color: '#17324D' }}>
+          <span style={{ color: "#17324D" }}>
             Clima
           </span>
 
-          <span style={{ color: '#38BDF8' }}>
+          <span style={{ color: "#38BDF8" }}>
             Plus
           </span>
         </NavLink>
@@ -59,25 +93,103 @@ function Navbar() {
 
           <div className="d-flex gap-3 align-items-center">
 
-            <NavLink
-              to="/login"
-              className="text-decoration-none text-secondary"
-            >
-              Iniciar sesión
-            </NavLink>
+            {sesionDemostracion ? (
+              <>
+                {/* Notificaciones */}
+                <NavLink
+                  to="/alertas"
+                  className="text-decoration-none position-relative"
+                  title="Notificaciones"
+                  aria-label="Ver notificaciones"
+                  style={{
+                    color: "#075d87",
+                    fontSize: "20px",
+                  }}
+                >
+                  <i className="bi bi-bell"></i>
+                </NavLink>
 
-            <NavLink
-              to="/registro"
-              className="btn btn-primary px-4"
-            >
-              Crear cuenta
-            </NavLink>
+                {/* Menú del usuario */}
+                <div className="dropdown">
+
+                  <button
+                    type="button"
+                    className="btn d-flex align-items-center gap-2 border-0"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    style={{ color: "#17324D" }}
+                  >
+                    <span
+                      className="d-flex align-items-center justify-content-center"
+                      style={{
+                        width: "36px",
+                        height: "36px",
+                        background: "#dff3ff",
+                        borderRadius: "10px",
+                        color: "#075d87",
+                      }}
+                    >
+                      <i className="bi bi-person"></i>
+                    </span>
+
+                    <span className="fw-semibold">
+                      {nombreUsuario}
+                    </span>
+
+                    <i className="bi bi-chevron-down small"></i>
+                  </button>
+
+                  <ul className="dropdown-menu dropdown-menu-end shadow-sm">
+                    <li>
+                      <NavLink
+                        className="dropdown-item"
+                        to={rutaPerfil}
+                      >
+                        <i className="bi bi-person me-2"></i>
+                        Mi perfil
+                      </NavLink>
+                    </li>
+
+                    <li>
+                      <hr className="dropdown-divider" />
+                    </li>
+
+                    <li>
+                      <NavLink
+                        className="dropdown-item"
+                        to="/login"
+                      >
+                        <i className="bi bi-box-arrow-right me-2"></i>
+                        Cerrar sesión
+                      </NavLink>
+                    </li>
+                  </ul>
+
+                </div>
+              </>
+            ) : (
+              <>
+                <NavLink
+                  to="/login"
+                  className="text-decoration-none text-secondary"
+                >
+                  Iniciar sesión
+                </NavLink>
+
+                <NavLink
+                  to="/registro"
+                  className="btn btn-primary px-4"
+                >
+                  Crear cuenta
+                </NavLink>
+              </>
+            )}
 
           </div>
         </div>
       </div>
     </nav>
-  )
+  );
 }
 
-export default Navbar
+export default Navbar;

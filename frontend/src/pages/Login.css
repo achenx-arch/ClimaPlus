@@ -332,3 +332,8 @@
     padding: 22px;
   }
 }
+/* Ajuste visual M02 */
+.login-left h1,
+.login-left h2 {
+  color: #ffffff;
+}

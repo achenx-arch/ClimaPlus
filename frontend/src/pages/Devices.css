@@ -1,0 +1,427 @@
+/* ========================================
+   M11 - MIS DISPOSITIVOS
+======================================== */
+
+.devices-page {
+  min-height: 100vh;
+  background: #f2f8fd;
+  padding: 38px 4% 70px;
+  color: #123455;
+}
+
+.devices-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Navegación */
+
+.devices-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  margin-bottom: 25px;
+  background: #ffffff;
+  border: 1px solid #d7e7f5;
+  border-radius: 10px;
+  color: #08618d;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.25s ease;
+}
+
+.devices-back:hover {
+  background: #e5f4ff;
+  color: #075580;
+}
+
+/* Encabezado */
+
+.devices-label {
+  display: block;
+  color: #075e8b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.devices-header {
+  margin-bottom: 30px;
+}
+
+.devices-header h1 {
+  color: #123455;
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 800;
+  margin: 0 0 10px;
+}
+
+.devices-header p {
+  margin: 0;
+  font-size: 15px;
+  color: #7895b5;
+}
+
+/* Tarjetas de resumen */
+
+.devices-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 35px;
+}
+
+.devices-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: #ffffff;
+  padding: 22px;
+  border: 1px solid #d9e9f7;
+  border-radius: 14px;
+}
+
+.devices-summary-card > i {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #e0f2ff;
+  color: #087db8;
+  font-size: 24px;
+}
+
+.devices-summary-card strong {
+  display: block;
+  color: #123455;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.devices-summary-card span {
+  color: #7895b5;
+  font-size: 13px;
+}
+
+/* Sección de dispositivos */
+
+.devices-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.devices-section-header h2 {
+  color: #123455;
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.devices-section-header span {
+  color: #7895b5;
+  font-size: 13px;
+}
+
+.devices-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+/* Tarjetas */
+
+.devices-card {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #d9e9f7;
+  border-radius: 15px;
+  padding: 22px;
+  cursor: pointer;
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+.devices-card:hover,
+.devices-card.selected {
+  background: linear-gradient(135deg, #075580, #159bd0);
+  border-color: #159bd0;
+  box-shadow: 0 10px 25px rgba(5, 82, 130, 0.16);
+  transform: translateY(-3px);
+}
+
+/* Texto de tarjetas seleccionadas */
+
+.devices-card:hover h3,
+.devices-card.selected h3,
+.devices-card:hover .devices-location,
+.devices-card.selected .devices-location,
+.devices-card:hover .devices-last-reading,
+.devices-card.selected .devices-last-reading {
+  color: #ffffff;
+}
+
+/* Encabezado de cada tarjeta */
+
+.devices-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.devices-card-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  background: #e0f2ff;
+  border-radius: 12px;
+  color: #087db8;
+  font-size: 23px;
+}
+
+.devices-card:hover .devices-card-icon,
+.devices-card.selected .devices-card-icon {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+/* Estados */
+
+.devices-status {
+  padding: 7px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.devices-status.connected {
+  color: #087e50;
+  background: #e4f7ed;
+}
+
+.devices-status.disconnected {
+  color: #c33c3c;
+  background: #ffe9e9;
+}
+
+/* Información */
+
+.devices-card h3 {
+  color: #123455;
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0 0 10px;
+}
+
+.devices-location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #7895b5;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+/* Lecturas */
+
+.devices-readings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.devices-readings > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 15px;
+  border-radius: 11px;
+  background: #f1f8ff;
+}
+
+.devices-readings i {
+  color: #087db8;
+  font-size: 19px;
+}
+
+.devices-readings strong {
+  color: #123455;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.devices-readings span {
+  color: #7895b5;
+  font-size: 12px;
+}
+
+/* Lecturas de tarjeta azul */
+
+.devices-card:hover .devices-readings > div,
+.devices-card.selected .devices-readings > div {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.devices-card:hover .devices-readings strong,
+.devices-card.selected .devices-readings strong,
+.devices-card:hover .devices-readings span,
+.devices-card.selected .devices-readings span,
+.devices-card:hover .devices-readings i,
+.devices-card.selected .devices-readings i {
+  color: #ffffff;
+}
+
+/* Última lectura */
+
+.devices-last-reading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #7895b5;
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+
+/* Botón */
+
+.devices-details-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 9px;
+  background: #08618d;
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.devices-details-button:hover {
+  background: #087db8;
+  color: #ffffff;
+}
+
+.devices-card:hover .devices-details-button,
+.devices-card.selected .devices-details-button {
+  background: #ffffff;
+  color: #075580;
+}
+
+.devices-card:hover .devices-details-button:hover,
+.devices-card.selected .devices-details-button:hover {
+  background: #e0f2ff;
+  color: #075580;
+}
+
+/* ========================================
+   RESPONSIVE
+======================================== */
+
+@media (max-width: 1100px) {
+  .devices-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .devices-page {
+    padding: 28px 20px 50px;
+  }
+
+  .devices-summary {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .devices-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .devices-card {
+    padding: 20px;
+  }
+
+  .devices-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .devices-section-header h2 {
+    font-size: 22px;
+  }
+
+  .devices-header p {
+    font-size: 14px;
+  }
+}
+/* ========================================
+   M11 - DISTRIBUCIÓN CON MENÚ LATERAL
+======================================== */
+
+.devices-page {
+  min-height: calc(100vh - 70px);
+  padding: 0;
+  background: #f2f8fd;
+}
+
+.devices-page .alerts-layout {
+  display: flex;
+  align-items: stretch;
+  min-height: calc(100vh - 70px);
+}
+
+.devices-page .alerts-sidebar {
+  flex: 0 0 220px;
+  width: 220px;
+  min-height: calc(100vh - 70px);
+}
+
+.devices-container {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 42px 35px 70px;
+}
+
+@media (max-width: 992px) {
+  .devices-container {
+    padding: 30px 24px 60px;
+  }
+}
+
+@media (max-width: 768px) {
+  .devices-page .alerts-layout {
+    flex-direction: column;
+  }
+
+  .devices-page .alerts-sidebar {
+    width: 100%;
+    min-height: auto;
+    flex: none;
+  }
+
+  .devices-container {
+    padding: 25px 16px 50px;
+  }
+}

@@ -1,0 +1,577 @@
+/* ========================================
+   M05 - PRONÓSTICO DE 5 DÍAS
+======================================== */
+
+.forecast-page {
+  min-height: calc(100vh - 80px);
+  background: #f3f8fc;
+  padding: 55px 24px 80px;
+  color: #173653;
+}
+
+.forecast-container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Encabezado */
+
+.forecast-label {
+  display: inline-block;
+  color: #006294;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  margin-bottom: 15px;
+}
+
+.forecast-container h1 {
+  font-size: clamp(30px, 3vw, 44px);
+  font-weight: 800;
+  color: #173653;
+  margin-bottom: 10px;
+}
+
+.forecast-description {
+  color: #7891aa;
+  font-size: 16px;
+  line-height: 1.7;
+  margin-bottom: 30px;
+}
+
+/* Ubicación */
+
+.forecast-location {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #175578;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 30px;
+}
+
+.forecast-location i {
+  color: #0075ad;
+  font-size: 19px;
+}
+
+/* Cuadrícula de pronósticos */
+
+.forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
+}
+
+/* Tarjetas */
+
+.forecast-card {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e3edf5;
+  border-radius: 18px;
+  padding: 24px 18px;
+  box-shadow: 0 8px 25px rgba(25, 65, 95, 0.06);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.forecast-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 14px 30px rgba(25, 65, 95, 0.12);
+}
+
+/* Día y fecha */
+
+.forecast-card-header {
+  text-align: center;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.forecast-card-header h2 {
+  color: #173653;
+  font-size: 20px;
+  font-weight: 750;
+  margin-bottom: 5px;
+}
+
+.forecast-card-header span {
+  color: #8498ac;
+  font-size: 13px;
+}
+
+/* Ícono meteorológico */
+
+.forecast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 115px;
+}
+
+.forecast-icon i {
+  font-size: 64px;
+  color: #f5b400;
+}
+
+.forecast-card:nth-child(2) .forecast-icon i {
+  color: #78a7c3;
+}
+
+.forecast-card:nth-child(3) .forecast-icon i {
+  color: #3798cf;
+}
+
+.forecast-card:nth-child(5) .forecast-icon i {
+  color: #ffbd25;
+}
+
+/* Condición */
+
+.forecast-condition {
+  min-height: 48px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #365c78;
+  line-height: 1.5;
+  margin-bottom: 22px;
+}
+
+/* Temperaturas */
+
+.forecast-temperatures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 0;
+  border-top: 1px solid #edf2f7;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.forecast-temperatures div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.forecast-temperatures span {
+  color: #8397aa;
+  font-size: 12px;
+}
+
+.forecast-temperatures strong {
+  color: #173653;
+  font-size: 24px;
+  font-weight: 750;
+}
+
+.forecast-temperatures div:last-child strong {
+  color: #4b9ac6;
+}
+
+/* Probabilidad de lluvia */
+
+.forecast-rain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 20px;
+  font-size: 12px;
+  color: #7891a6;
+}
+
+.forecast-rain i {
+  color: #258fc9;
+  font-size: 16px;
+}
+
+.forecast-rain strong {
+  color: #176c9c;
+  font-size: 14px;
+}
+
+/* Nota informativa */
+
+.forecast-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 30px;
+  padding: 16px 20px;
+  background: #e4f2fc;
+  border: 1px solid #cfe6f7;
+  border-radius: 12px;
+  color: #527b98;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.forecast-note i {
+  color: #0875af;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+/* ========================================
+   TABLETAS
+======================================== */
+
+@media (max-width: 1100px) {
+  .forecast-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .forecast-page {
+    padding: 35px 20px 60px;
+  }
+
+  .forecast-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .forecast-card {
+    padding: 22px 15px;
+  }
+
+  .forecast-icon i {
+    font-size: 55px;
+  }
+}
+
+/* ========================================
+   CELULARES
+======================================== */
+
+@media (max-width: 480px) {
+  .forecast-page {
+    padding: 28px 18px 50px;
+  }
+
+  .forecast-container h1 {
+    font-size: 30px;
+  }
+
+  .forecast-description {
+    font-size: 14px;
+  }
+
+  .forecast-location {
+    font-size: 13px;
+  }
+
+  .forecast-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .forecast-card {
+    padding: 24px;
+  }
+
+  .forecast-icon {
+    height: 100px;
+  }
+
+  .forecast-icon i {
+    font-size: 65px;
+  }
+
+  .forecast-condition {
+    min-height: auto;
+  }
+
+  .forecast-temperatures strong {
+    font-size: 26px;
+  }
+
+  .forecast-note {
+    font-size: 12px;
+  }
+}
+/* ===== BUSCADOR DE PRONÓSTICO ===== */
+
+.forecast-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 560px;
+  margin: 25px auto 30px;
+  padding: 6px 6px 6px 18px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(20, 54, 85, 0.08);
+}
+
+.forecast-search i {
+  color: #1683bd;
+  font-size: 17px;
+}
+
+.forecast-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #173653;
+  font-size: 14px;
+}
+
+.forecast-search button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 9px;
+  background: #075d87;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.forecast-search button:hover {
+  background: #087eaf;
+}
+
+@media (max-width: 576px) {
+  .forecast-search {
+    flex-wrap: wrap;
+  }
+
+  .forecast-search button {
+    width: 100%;
+  }
+}
+/* ===== M05: GRÁFICO DE TEMPERATURAS ===== */
+
+.forecast-chart {
+  margin-top: 28px;
+  padding: 25px 28px;
+  background: #ffffff;
+  border: 1px solid #dce8f3;
+  border-radius: 15px;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.forecast-chart:hover {
+  box-shadow: 0 10px 30px rgba(13, 79, 121, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Encabezado */
+
+.forecast-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+.forecast-chart-header h2 {
+  margin: 0;
+  color: #173653;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.forecast-chart-header p {
+  margin: 6px 0 0;
+  color: #8aa0b5;
+  font-size: 13px;
+}
+
+/* Leyenda */
+
+.forecast-chart-legend {
+  display: flex;
+  gap: 18px;
+  color: #7189a1;
+  font-size: 12px;
+}
+
+/* Barras */
+
+.forecast-chart-bars {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  gap: 15px;
+  min-height: 180px;
+  margin-top: 25px;
+  border-bottom: 1px solid #e2ebf4;
+}
+
+.forecast-chart-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  gap: 10px;
+  color: #7890a6;
+  font-size: 12px;
+}
+
+.forecast-chart-columns {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 7px;
+  height: 125px;
+}
+
+.forecast-bar-max,
+.forecast-bar-min {
+  width: 13px;
+  max-height: 125px;
+  border-radius: 6px 6px 0 0;
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.forecast-bar-max {
+  background: #ffa500;
+}
+
+.forecast-bar-min {
+  background: #38bdf8;
+}
+
+/* Efecto al pasar el mouse */
+
+.forecast-chart-day:hover .forecast-bar-max,
+.forecast-chart-day:hover .forecast-bar-min {
+  transform: scaleX(1.2);
+  filter: brightness(1.1);
+}
+
+.forecast-chart-day > span {
+  padding-bottom: 10px;
+}
+
+/* Adaptación para celulares */
+
+@media (max-width: 576px) {
+  .forecast-chart {
+    padding: 20px 14px;
+  }
+
+  .forecast-chart-header {
+    flex-direction: column;
+  }
+
+  .forecast-chart-legend {
+    gap: 12px;
+  }
+
+  .forecast-chart-bars {
+    gap: 5px;
+  }
+
+  .forecast-chart-columns {
+    gap: 4px;
+  }
+
+  .forecast-bar-max,
+  .forecast-bar-min {
+    width: 10px;
+  }
+}
+/* ===== EFECTOS HOVER M05 ===== */
+
+.forecast-card {
+  transition:
+    background-color 0.3s ease,
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.forecast-card:hover {
+  background: #075d87;
+  transform: translateY(-6px);
+  box-shadow: 0 12px 28px rgba(7, 93, 135, 0.2);
+}
+
+/* Cambiar los textos a blanco */
+
+.forecast-card:hover h2,
+.forecast-card:hover .forecast-card-header span,
+.forecast-card:hover .forecast-condition,
+.forecast-card:hover .forecast-temperatures span,
+.forecast-card:hover .forecast-temperatures strong,
+.forecast-card:hover .forecast-rain,
+.forecast-card:hover .forecast-rain span,
+.forecast-card:hover .forecast-rain strong,
+.forecast-card:hover .forecast-rain i {
+  color: #ffffff;
+}
+
+/* Mantener visibles las líneas divisorias */
+
+.forecast-card:hover .forecast-temperatures,
+.forecast-card:hover .forecast-rain {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+/* Gráfico y recomendación en dos columnas */
+.forecast-bottom {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  margin-top: 24px;
+  align-items: stretch;
+}
+
+/* Gráfico de temperaturas */
+.forecast-bottom .forecast-chart {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Tarjeta de recomendación */
+.forecast-bottom .forecast-recommendation {
+  margin: 0;
+  background: #112d46;
+  color: white;
+  border-radius: 16px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.forecast-bottom .forecast-recommendation > i {
+  font-size: 30px;
+  color: #ffbd24;
+  margin-bottom: 35px;
+}
+
+.forecast-bottom .forecast-recommendation h3 {
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.forecast-bottom .forecast-recommendation p {
+  color: #b8c9d8;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* Adaptación a pantallas pequeñas */
+@media (max-width: 768px) {
+  .forecast-bottom {
+    grid-template-columns: 1fr;
+  }
+}

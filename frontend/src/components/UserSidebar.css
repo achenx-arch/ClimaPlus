@@ -1,0 +1,165 @@
+/* ==========================================
+   CLIMAPLUS - MENÚ LATERAL DEL USUARIO
+   Reutilizable en las pantallas del usuario
+   ========================================== */
+
+.user-sidebar {
+  width: 250px;
+  min-width: 250px;
+  min-height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e3eaf2;
+  padding: 28px 18px 20px;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* ===== SECCIÓN PRINCIPAL ===== */
+
+.user-sidebar-main {
+  width: 100%;
+}
+
+.user-sidebar-label {
+  display: block;
+  margin: 10px 12px 22px;
+  color: #8a9bae;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+}
+
+/* ===== ENLACES ===== */
+
+.user-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+
+  padding: 14px 15px;
+  border-radius: 10px;
+
+  color: #58718b;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.user-sidebar-link i {
+  width: 20px;
+  text-align: center;
+  font-size: 18px;
+}
+
+.user-sidebar-link:hover {
+  background: #edf6ff;
+  color: #075d87;
+}
+
+/* Opción seleccionada */
+
+.user-sidebar-link.active {
+  background: #075d87;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.user-sidebar-link.active:hover {
+  background: #064c70;
+  color: #ffffff;
+}
+
+/* Accesibilidad */
+
+.user-sidebar-link:focus-visible {
+  outline: 2px solid #1686e8;
+  outline-offset: 2px;
+}
+
+/* ===== PARTE INFERIOR ===== */
+
+.user-sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  padding-top: 16px;
+  border-top: 1px solid #e5edf5;
+}
+
+/* ===== PANTALLAS MEDIANAS ===== */
+
+@media (max-width: 1024px) {
+  .user-sidebar {
+    width: 220px;
+    min-width: 220px;
+    padding: 24px 14px;
+  }
+
+  .user-sidebar-link {
+    padding: 12px;
+    font-size: 13px;
+  }
+}
+
+/* ===== TABLETAS Y CELULARES ===== */
+
+@media (max-width: 768px) {
+  .user-sidebar {
+    width: 100%;
+    min-width: 0;
+    min-height: auto;
+    padding: 16px;
+    border-right: none;
+    border-bottom: 1px solid #e3eaf2;
+    gap: 18px;
+  }
+
+  .user-sidebar-label {
+    margin: 5px 8px 14px;
+  }
+
+  .user-sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .user-sidebar-link {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .user-sidebar-bottom {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-top: 1px solid #e5edf5;
+  }
+}
+
+@media (max-width: 480px) {
+  .user-sidebar-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .user-sidebar-link {
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .user-sidebar-link i {
+    font-size: 16px;
+  }
+}
