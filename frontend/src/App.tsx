@@ -2,6 +2,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Home from './pages/Home'
 import Login from './pages/Login'
+import RecoverPassword from './pages/RecoverPassword'
 import Register from './pages/Register'
 import Forecast from './pages/Forecast'
 import CurrentWeather from './pages/CurrentWeather'
@@ -16,6 +17,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
 import AdminAlerts from "./pages/AdminAlerts";
 import UserProfile from "./pages/UserProfile";
+
 
 function App() {
   const location = useLocation()
@@ -45,6 +47,11 @@ const mostrarNavbar =
 
         {/* M02 - Inicio de sesión */}
         <Route path="/login" element={<Login />} />
+        {/* Recuperación de contraseña */}
+<Route
+  path="/recuperar-contrasena"
+  element={<RecoverPassword />}
+/>
 
         {/* M03 - Registro de usuarios */}
         <Route path="/registro" element={<Register />} /> 

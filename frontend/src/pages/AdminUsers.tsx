@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import AdminSidebar from "../components/AdminSidebar";
 import "./AdminUsers.css";
 
@@ -51,6 +50,22 @@ const usuariosIniciales: Usuario[] = [
     estado: "Inactivo",
     fecha: "28 sep. 2026",
   },
+  {
+  id: 5,
+  nombre: "Luis Gómez",
+  correo: "luis.gomez@example.com",
+  rol: "USUARIO",
+  estado: "Activo",
+  fecha: "2 oct. 2026",
+},
+{
+  id: 6,
+  nombre: "Sofía Pérez",
+  correo: "sofia.perez@example.com",
+  rol: "USUARIO",
+  estado: "Inactivo",
+  fecha: "30 sep. 2026",
+},
 ];
 
 export default function AdminUsers() {
@@ -142,11 +157,6 @@ export default function AdminUsers() {
 
       <main className="admin-users-page">
         <div className="admin-users-container">
-          {/* Encabezado */}
-          <Link to="/admin" className="admin-users-back">
-            <i className="bi bi-arrow-left"></i>
-            Volver al panel
-          </Link>
 
           <span className="admin-users-label">ADMINISTRACIÓN</span>
 
@@ -219,15 +229,6 @@ export default function AdminUsers() {
               {usuariosInactivos} inactivos
             </div>
           </div>
-
-          {/* Tabla */}
-          <section className="admin-users-section">
-            <h2>Usuarios registrados</h2>
-            <p>
-              Visualiza la información y el estado de los usuarios de la
-              plataforma.
-            </p>
-          </section>
 
           <div className="admin-users-table-container">
             <table className="admin-users-table">

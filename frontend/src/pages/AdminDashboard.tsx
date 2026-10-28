@@ -1,197 +1,232 @@
 import { Link } from "react-router-dom";
+import AdminSidebar from "../components/AdminSidebar";
 import "./AdminDashboard.css";
 
 const estadisticas = [
   {
     titulo: "Usuarios registrados",
     valor: "128",
+    descripcion: "Cuentas del sistema",
     icono: "bi-people",
     color: "blue",
   },
   {
-    titulo: "Dispositivos ESP32",
-    valor: "3",
-    icono: "bi-cpu",
+    titulo: "Usuarios activos",
+    valor: "116",
+    descripcion: "Cuentas habilitadas",
+    icono: "bi-person",
     color: "cyan",
   },
   {
-    titulo: "Alertas activas",
-    valor: "3",
+    titulo: "Alertas generadas",
+    valor: "24",
+    descripcion: "Alertas ambientales",
     icono: "bi-bell",
     color: "orange",
   },
   {
-    titulo: "Consultas realizadas",
-    valor: "1,245",
-    icono: "bi-cloud-sun",
-    color: "green",
+    titulo: "Dispositivos registrados",
+    valor: "18",
+    descripcion: "Dispositivos ESP32",
+    icono: "bi-pc-display",
+    color: "blue",
   },
 ];
 
 const actividades = [
   {
-    icono: "bi-person-plus",
-    titulo: "Nuevo usuario registrado",
-    descripcion: "Se ha registrado un nuevo usuario en ClimaPlus.",
-    tiempo: "Hace 5 minutos",
-  },
-  {
+    id: 1,
     icono: "bi-cpu",
-    titulo: "Dispositivo conectado",
-    descripcion: "ESP32 - Estación Antigua se encuentra conectado.",
-    tiempo: "Hace 15 minutos",
+    titulo: "Lectura ambiental recibida",
+    descripcion: "Terraza Guatemala · ESP32",
+    fecha: "7 oct 2026 - 08:30",
   },
   {
-    icono: "bi-exclamation-triangle",
-    titulo: "Nueva alerta meteorológica",
-    descripcion: "Se registró una alerta por lluvias intensas.",
-    tiempo: "Hace 30 minutos",
+    id: 2,
+    icono: "bi-cloud-rain",
+    titulo: "Alerta de lluvia generada",
+    descripcion: "Antigua Guatemala · Origen Clima",
+    fecha: "7 oct 2026 - 08:20",
+  },
+  {
+    id: 3,
+    icono: "bi-person",
+    titulo: "Nueva cuenta registrada",
+    descripcion: "Ana López · Rol USUARIO",
+    fecha: "7 oct 2026 - 08:10",
+  },
+  {
+    id: 4,
+    icono: "bi-person-x",
+    titulo: "Cuenta desactivada",
+    descripcion: "Diego Morales · Desactivación lógica",
+    fecha: "6 oct 2026 - 19:10",
+  },
+];
+
+const alertasRecientes = [
+  {
+    id: 1,
+    titulo: "Lluvia",
+    ubicacion: "Antigua Guatemala",
+    fecha: "7 oct 2026 - 08:20",
+    estado: "NUEVA",
+    tipo: "nueva",
+  },
+  {
+    id: 2,
+    titulo: "Temperatura baja",
+    ubicacion: "Quetzaltenango",
+    fecha: "6 oct 2026 - 18:00",
+    estado: "LEÍDA",
+    tipo: "leida",
+  },
+  {
+    id: 3,
+    titulo: "Temperatura alta",
+    ubicacion: "Ciudad de Guatemala",
+    fecha: "6 oct 2026 - 13:30",
+    estado: "NUEVA",
+    tipo: "nueva",
   },
 ];
 
 export default function AdminDashboard() {
   return (
     <main className="admin-dashboard-page">
-      <div className="admin-dashboard-container">
+      <div className="admin-dashboard-layout">
+        {/* MENÚ LATERAL */}
+        <AdminSidebar />
 
-        <div className="admin-dashboard-heading">
-          <span className="admin-dashboard-label">
-            ADMINISTRACIÓN
-          </span>
+        {/* CONTENIDO PRINCIPAL */}
+        <div className="admin-dashboard-container">
+          <div className="admin-dashboard-heading">
+            <span className="admin-dashboard-label">
+              ADMINISTRACIÓN
+            </span>
 
-          <h1>Panel de administración</h1>
+            <h1>Panel de administración</h1>
 
-          <p>
-            Supervisa los usuarios, dispositivos y alertas
-            meteorológicas de ClimaPlus.
-          </p>
-        </div>
-
-        <section className="admin-dashboard-section">
-          <div className="admin-dashboard-section-heading">
-            <h2>Resumen general</h2>
-            <span>Datos de demostración</span>
+            <p>Resumen general del sistema ClimaPlus.</p>
           </div>
 
-          <div className="admin-dashboard-stats">
-            {estadisticas.map((estadistica) => (
-              <article
-                className="admin-dashboard-stat"
-                key={estadistica.titulo}
-              >
-                <div
-                  className={`admin-dashboard-stat-icon ${estadistica.color}`}
+          {/* ESTADÍSTICAS */}
+          <section className="admin-dashboard-section">
+            <div className="admin-dashboard-stats">
+              {estadisticas.map((estadistica) => (
+                <article
+                  className="admin-dashboard-stat"
+                  key={estadistica.titulo}
                 >
-                  <i className={`bi ${estadistica.icono}`}></i>
-                </div>
+                  <div
+                    className={`admin-dashboard-stat-icon ${estadistica.color}`}
+                  >
+                    <i className={`bi ${estadistica.icono}`}></i>
+                  </div>
 
-                <div>
-                  <h3>{estadistica.valor}</h3>
-                  <p>{estadistica.titulo}</p>
-                </div>
-              </article>
-            ))}
+                  <div className="admin-dashboard-stat-content">
+                    <span>{estadistica.titulo}</span>
+
+                    <strong>{estadistica.valor}</strong>
+
+                    <small>{estadistica.descripcion}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          {/* AVISO DE DATOS DE EJEMPLO */}
+          <div className="admin-dashboard-notice">
+            <i className="bi bi-info-circle"></i>
+
+            <span>
+              Datos de ejemplo. Este resumen es un mockup de
+              ClimaPlus Fase 1 y no representa estadísticas de
+              una base de datos real.
+            </span>
           </div>
-        </section>
 
-        <section className="admin-dashboard-section">
-          <h2>Gestión del sistema</h2>
+          {/* ACTIVIDAD Y ALERTAS */}
+          <div className="admin-dashboard-columns">
+            {/* ACTIVIDAD RECIENTE */}
+            <section className="admin-dashboard-panel">
+              <div className="admin-dashboard-panel-heading">
+                <h2>Actividad reciente</h2>
 
-          <div className="admin-dashboard-actions">
-            <Link
-              to="/admin/usuarios"
-              className="admin-dashboard-action"
-            >
-              <div className="admin-dashboard-action-icon">
-                <i className="bi bi-people"></i>
+                <Link
+                  to="/admin/usuarios"
+                  className="admin-dashboard-panel-link"
+                >
+                  Ver usuarios
+                </Link>
               </div>
 
-              <h3>Gestión de usuarios</h3>
+              <div className="admin-dashboard-activity">
+                {actividades.map((actividad) => (
+                  <article
+                    className="admin-dashboard-activity-item"
+                    key={actividad.id}
+                  >
+                    <div className="admin-dashboard-activity-icon">
+                      <i className={`bi ${actividad.icono}`}></i>
+                    </div>
 
-              <p>
-                Consulta y administra los usuarios registrados
-                en la plataforma.
-              </p>
+                    <div className="admin-dashboard-activity-content">
+                      <h3>{actividad.titulo}</h3>
 
-              <span>
-                Administrar usuarios
-                <i className="bi bi-arrow-right"></i>
-              </span>
-            </Link>
+                      <p>{actividad.descripcion}</p>
 
-            <Link
-              to="/admin/alertas"
-              className="admin-dashboard-action"
-            >
-              <div className="admin-dashboard-action-icon">
-                <i className="bi bi-bell"></i>
+                      <small>{actividad.fecha}</small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            {/* ALERTAS RECIENTES */}
+            <section className="admin-dashboard-panel">
+              <div className="admin-dashboard-panel-heading">
+                <h2>Alertas recientes</h2>
+
+                <Link
+                  to="/admin/alertas"
+                  className="admin-dashboard-panel-link"
+                >
+                  Ver alertas
+                </Link>
               </div>
 
-              <h3>Gestión de alertas</h3>
+              <div className="admin-dashboard-alerts">
+                {alertasRecientes.map((alerta) => (
+                  <article
+                    className="admin-dashboard-alert-item"
+                    key={alerta.id}
+                  >
+                    <div className="admin-dashboard-alert-top">
+                      <h3>{alerta.titulo}</h3>
 
-              <p>
-                Supervisa las alertas meteorológicas
-                registradas en el sistema.
-              </p>
+                      <span
+                        className={`admin-dashboard-alert-badge ${alerta.tipo}`}
+                      >
+                        {alerta.estado}
+                      </span>
+                    </div>
 
-              <span>
-                Administrar alertas
-                <i className="bi bi-arrow-right"></i>
-              </span>
-            </Link>
+                    <strong>{alerta.ubicacion}</strong>
 
-            <Link
-              to="/dispositivos"
-              className="admin-dashboard-action"
-            >
-              <div className="admin-dashboard-action-icon">
-                <i className="bi bi-cpu"></i>
+                    <small>{alerta.fecha}</small>
+                  </article>
+                ))}
               </div>
-
-              <h3>Dispositivos ESP32</h3>
-
-              <p>
-                Consulta el estado y las lecturas
-                de los dispositivos meteorológicos.
-              </p>
-
-              <span>
-                Ver dispositivos
-                <i className="bi bi-arrow-right"></i>
-              </span>
-            </Link>
-          </div>
-        </section>
-
-        <section className="admin-dashboard-section">
-          <div className="admin-dashboard-section-heading">
-            <h2>Actividad reciente</h2>
-            <span>Datos de demostración</span>
+            </section>
           </div>
 
-          <div className="admin-dashboard-activity">
-            {actividades.map((actividad) => (
-              <article
-                className="admin-dashboard-activity-item"
-                key={actividad.titulo}
-              >
-                <div className="admin-dashboard-activity-icon">
-                  <i className={`bi ${actividad.icono}`}></i>
-                </div>
-
-                <div className="admin-dashboard-activity-content">
-                  <h3>{actividad.titulo}</h3>
-                  <p>{actividad.descripcion}</p>
-                </div>
-
-                <span className="admin-dashboard-activity-time">
-                  {actividad.tiempo}
-                </span>
-              </article>
-            ))}
-          </div>
-        </section>
-
+          {/* PIE DE PÁGINA */}
+          <footer className="admin-dashboard-footer">
+            Datos de ejemplo · ClimaPlus Fase 1 · 7 oct 2026
+          </footer>
+        </div>
       </div>
     </main>
   );

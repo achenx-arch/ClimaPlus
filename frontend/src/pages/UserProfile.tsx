@@ -36,9 +36,31 @@ const datosIniciales = esAdministrador
   ? perfilAdministrador
   : perfilInicial;
 
-const [perfil, setPerfil] = useState<PerfilUsuario>(datosIniciales);
-const [nombre, setNombre] = useState(datosIniciales.nombre);
-const [correo, setCorreo] = useState(datosIniciales.correo);
+const clavePerfil = esAdministrador
+  ? "climaplus_perfil_admin"
+  : "climaplus_perfil_usuario";
+
+const [perfil, setPerfil] = useState<PerfilUsuario>(() => {
+  try {
+    const guardado = localStorage.getItem(clavePerfil);
+
+    if (guardado) {
+      const datos = JSON.parse(guardado) as Partial<PerfilUsuario>;
+
+      return {
+        ...datosIniciales,
+        nombre: datos.nombre || datosIniciales.nombre,
+        correo: datos.correo || datosIniciales.correo,
+      };
+    }
+  } catch (error) {
+    console.error("Error al recuperar el perfil:", error);
+  }
+
+  return datosIniciales;
+});
+const [nombre, setNombre] = useState(perfil.nombre);
+const [correo, setCorreo] = useState(perfil.correo);
   const [mensaje, setMensaje] = useState("");
   const [mostrarCambioPassword, setMostrarCambioPassword] = useState(false);
 
@@ -67,11 +89,27 @@ const [correo, setCorreo] = useState(datosIniciales.correo);
       return;
     }
 
-    setPerfil((anterior) => ({
-      ...anterior,
+const perfilActualizado: PerfilUsuario = {
+  ...perfil,
+  nombre: nombreLimpio,
+  correo: correoLimpio,
+};
+
+try {
+  localStorage.setItem(
+    clavePerfil,
+    JSON.stringify({
       nombre: nombreLimpio,
       correo: correoLimpio,
-    }));
+    })
+  );
+
+  setPerfil(perfilActualizado);
+} catch (error) {
+  console.error("Error al guardar el perfil:", error);
+  setMensaje("No se pudieron guardar los cambios.");
+  return;
+}
 
     setNombre(nombreLimpio);
     setCorreo(correoLimpio);
