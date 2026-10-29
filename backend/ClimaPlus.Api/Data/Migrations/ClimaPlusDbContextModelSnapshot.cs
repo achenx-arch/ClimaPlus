@@ -191,6 +191,10 @@ namespace ClimaPlus.Api.Data.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("descripcion_condicion");
 
+                    b.Property<string>("Detalle")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("detalle");
+
                     b.Property<DateTime>("FechaConsulta")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -205,7 +209,7 @@ namespace ClimaPlus.Api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("id_ubicacion");
 
-                    b.Property<long>("IdUsuario")
+                    b.Property<long?>("IdUsuario")
                         .HasColumnType("bigint")
                         .HasColumnName("id_usuario");
 
@@ -243,6 +247,10 @@ namespace ClimaPlus.Api.Data.Migrations
                     b.ToTable("consulta_clima", null, t =>
                         {
                             t.HasCheckConstraint("ck_consulta_clima_codigo_condicion", "codigo_condicion BETWEEN 200 AND 899");
+
+                            t.HasCheckConstraint("ck_consulta_clima_detalle_objeto", "detalle IS NULL OR jsonb_typeof(detalle) = 'object'");
+
+                            t.HasCheckConstraint("ck_consulta_clima_detalle_pronostico", "tipo_consulta <> 'PRONOSTICO' OR detalle IS NOT NULL");
 
                             t.HasCheckConstraint("ck_consulta_clima_humedad", "humedad BETWEEN 0 AND 100");
 
@@ -607,7 +615,6 @@ namespace ClimaPlus.Api.Data.Migrations
                         .WithMany("ConsultasClima")
                         .HasForeignKey("IdUsuario")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_consulta_clima_usuario");
 
                     b.Navigation("Ubicacion");
