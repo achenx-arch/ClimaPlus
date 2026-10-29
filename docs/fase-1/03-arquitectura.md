@@ -62,7 +62,7 @@ Entity Framework Core (proveedor Npgsql) es la única vía de acceso a PostgreSQ
 
 El backend tiene un cliente HTTP tipado que consume tres servicios de OpenWeather: Geocoding (búsqueda de ubicaciones), Current Weather (clima actual) y 5 day / 3 hour Forecast (pronóstico). Las respuestas se transforman a DTO propios antes de llegar al frontend, así que la interfaz no depende del formato de OpenWeather.
 
-En una fase posterior, las rutas públicas se protegerán con Rate Limiting de ASP.NET Core y con caché temporal en `IMemoryCache` (D-14).
+Las rutas públicas se protegen con Rate Limiting de ASP.NET Core (30 peticiones por minuto por IP). La caché del clima es la propia base de datos: una consulta reciente de la misma ubicación (10 minutos para el clima actual, 30 para el pronóstico) se reutiliza sin llamar a OpenWeather; `IMemoryCache` solo repite búsquedas de ubicaciones (D-14 ajustada por D-23).
 
 ### Hardware
 
@@ -97,7 +97,7 @@ Ejemplo: un usuario autenticado consulta el clima actual de Cobán.
 5. Evalúa las reglas de alerta del usuario y, si corresponde, crea una alerta.
 6. Devuelve un DTO a React.
 
-Si la consulta es anónima, se omiten el registro en el historial y la evaluación de alertas.
+Si la consulta es anónima, se guarda igual en `consulta_clima` con `id_usuario` NULL (E-02) antes de responder, pero no entra en ningún historial personal y no se evalúan alertas (RN-BD-42).
 
 ### 3. Lecturas del ESP32
 

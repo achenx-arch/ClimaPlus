@@ -42,6 +42,12 @@ public static class SeguridadServiceCollectionExtensions
                 "'RateLimiting:Autenticacion' requiere PermitLimit y VentanaSegundos mayores que 0.")
             .ValidateOnStart();
 
+        services.AddOptions<LimiteClimaOptions>()
+            .Bind(configuration.GetSection(LimiteClimaOptions.Seccion))
+            .Validate(o => o.PermitLimit > 0 && o.VentanaSegundos > 0,
+                "'RateLimiting:Clima' requiere PermitLimit y VentanaSegundos mayores que 0.")
+            .ValidateOnStart();
+
         // --- Servicios de seguridad -------------------------------------------------------
         services.AddSingleton<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
         services.AddSingleton<JwtTokenService>();
@@ -92,7 +98,7 @@ public static class SeguridadServiceCollectionExtensions
             });
         });
 
-        // --- Rate limiting de autenticación ----------------------------------------------
+        // --- Rate limiting (autenticación y clima) ----------------------------------------------
         services.AddRateLimiter(opciones =>
         {
             opciones.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -126,6 +132,21 @@ public static class SeguridadServiceCollectionExtensions
                 var ruta = http.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
                 return RateLimitPartition.GetFixedWindowLimiter($"{ip}|{ruta}", _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = limite.PermitLimit,
+                    Window = TimeSpan.FromSeconds(limite.VentanaSegundos),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                });
+            });
+
+            // D-23: /api/clima/* comparte un límite por IP (protege la cuota de OpenWeather).
+            opciones.AddPolicy(PoliticasSeguridad.RateLimitClima, http =>
+            {
+                var limite = http.RequestServices.GetRequiredService<IOptions<LimiteClimaOptions>>().Value;
+                var ip = http.Connection.RemoteIpAddress?.ToString() ?? "desconocida";
+
+                return RateLimitPartition.GetFixedWindowLimiter($"clima|{ip}", _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = limite.PermitLimit,
                     Window = TimeSpan.FromSeconds(limite.VentanaSegundos),

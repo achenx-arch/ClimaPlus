@@ -25,7 +25,7 @@ Puede:
 - consultar el clima actual;
 - consultar el pronóstico.
 
-Sus consultas **no** se guardan en el historial (D-04).
+Sus consultas se guardan sin usuario (`id_usuario` NULL), porque los datos externos se almacenan antes de mostrarse, pero no forman parte de ningún historial personal ni generan alertas (D-04 modificada por E-02).
 
 ### Usuario autenticado (rol USUARIO)
 
@@ -81,5 +81,4 @@ Puede:
 - Múltiples APIs meteorológicas (solo OpenWeather).
 - Funciones sociales (compartir, comentar, seguir usuarios).
 - Pagos o suscripciones.
-- Almacenar los bloques del pronóstico (D-03).
-- Guardar en el historial las consultas de visitantes anónimos (D-04).
+- Mostrar las consultas de visitantes anónimos en un historial personal (E-02).

@@ -16,6 +16,8 @@ public static class PoliticasSeguridad
     public const string CorsFrontend = "FrontendClimaPlus";
 
     public const string RateLimitAutenticacion = "autenticacion";
+
+    public const string RateLimitClima = "clima";
 }
 
 /// <summary>Categoría de log para eventos de seguridad. Nunca registrar contraseñas ni tokens.</summary>

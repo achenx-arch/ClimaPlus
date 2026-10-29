@@ -29,6 +29,14 @@ public class ConsultaClimaConfiguration : IEntityTypeConfiguration<ConsultaClima
             t.HasCheckConstraint("ck_consulta_clima_mediciones_tipo",
                 $"(tipo_consulta = '{TiposConsulta.Actual}' AND num_nonnulls({Mediciones}) = 6) " +
                 $"OR (tipo_consulta = '{TiposConsulta.Pronostico}' AND num_nonnulls({Mediciones}) = 0)");
+
+            // E-03: detalle es un objeto JSON cuando existe.
+            t.HasCheckConstraint("ck_consulta_clima_detalle_objeto",
+                "detalle IS NULL OR jsonb_typeof(detalle) = 'object'");
+
+            // E-03 / RN-BD-43: toda consulta PRONOSTICO guarda su pronóstico en detalle.
+            t.HasCheckConstraint("ck_consulta_clima_detalle_pronostico",
+                $"tipo_consulta <> '{TiposConsulta.Pronostico}' OR detalle IS NOT NULL");
         });
 
         builder.HasKey(c => c.IdConsulta).HasName("pk_consulta_clima");
@@ -38,10 +46,10 @@ public class ConsultaClimaConfiguration : IEntityTypeConfiguration<ConsultaClima
             .HasColumnType("bigint")
             .UseIdentityByDefaultColumn();
 
+        // E-02: NULL = visitante sin sesión.
         builder.Property(c => c.IdUsuario)
             .HasColumnName("id_usuario")
-            .HasColumnType("bigint")
-            .IsRequired();
+            .HasColumnType("bigint");
 
         builder.Property(c => c.IdUbicacion)
             .HasColumnName("id_ubicacion")
@@ -77,6 +85,11 @@ public class ConsultaClimaConfiguration : IEntityTypeConfiguration<ConsultaClima
             .HasColumnName("descripcion_condicion")
             .HasMaxLength(100);
 
+        // E-03: datos normalizados en JSON (sección 6 de la especificación).
+        builder.Property(c => c.Detalle)
+            .HasColumnName("detalle")
+            .HasColumnType("jsonb");
+
         builder.Property(c => c.FechaConsulta)
             .HasColumnName("fecha_consulta")
             .HasColumnType("timestamp with time zone")
@@ -87,6 +100,7 @@ public class ConsultaClimaConfiguration : IEntityTypeConfiguration<ConsultaClima
         builder.HasOne(c => c.Usuario)
             .WithMany(u => u.ConsultasClima)
             .HasForeignKey(c => c.IdUsuario)
+            .IsRequired(false)
             .HasConstraintName("fk_consulta_clima_usuario")
             .OnDelete(DeleteBehavior.Restrict);
 

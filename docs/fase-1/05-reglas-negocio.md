@@ -1,6 +1,6 @@
 # Reglas de negocio de base de datos
 
-Las reglas RN-BD-01 a RN-BD-34 provienen del análisis del modelo relacional y conservan su numeración original. RN-BD-35 y RN-BD-36 se agregan únicamente para dejar por escrito D-13 y D-03.
+Las reglas RN-BD-01 a RN-BD-34 provienen del análisis del modelo relacional y conservan su numeración original. RN-BD-35 y RN-BD-36 se agregan únicamente para dejar por escrito D-13 y D-03. RN-BD-37 a RN-BD-41 están en la enmienda E-01. RN-BD-13 y RN-BD-36 se reescriben y RN-BD-42 y RN-BD-43 se agregan con las enmiendas E-02 y E-03.
 
 **Columna "Dónde se aplica":**
 - **BD:** restricción en PostgreSQL (PK, FK, UNIQUE, CHECK, DEFAULT).
@@ -33,10 +33,12 @@ Las reglas RN-BD-01 a RN-BD-34 provienen del análisis del modelo relacional y c
 
 | ID | Regla | Dónde se aplica |
 |---|---|---|
-| RN-BD-13 | Cada consulta de clima actual o pronóstico de un usuario autenticado se registra en `consulta_clima` con su `tipo_consulta`. Las consultas anónimas no se registran (D-03, D-04). | Backend |
+| RN-BD-13 | Cada consulta de clima actual o pronóstico se registra en `consulta_clima` con su tipo. Si hay sesión, con el usuario; si no, con `id_usuario` NULL. Las consultas anónimas no aparecen en ningún historial personal (E-02, reescrita). | Backend |
 | RN-BD-14 | En consultas `ACTUAL`, la humedad va de 0 a 100, la velocidad del viento es ≥ 0 y el código de condición está entre 200 y 899. | BD (CHECK) |
 | RN-BD-15 | Todos los valores se guardan en unidades métricas (°C, m/s). La conversión de unidades es responsabilidad de la presentación. | Backend |
-| RN-BD-36 | Una consulta `ACTUAL` debe tener todas sus mediciones. Una consulta `PRONOSTICO` no almacena mediciones: solo registra usuario, ubicación, tipo y fecha (D-03). | BD (CHECK) |
+| RN-BD-36 | Una consulta `ACTUAL` tiene sus 6 mediciones en columnas; una `PRONOSTICO` no tiene mediciones en columnas y guarda el pronóstico en `detalle` (E-03, reescrita). | BD (CHECK) |
+| RN-BD-42 | Una consulta con `id_usuario` NULL nunca origina alertas; la consulta que origina una alerta pertenece al mismo usuario que la alerta (E-02). | Backend |
+| RN-BD-43 | `detalle` es un objeto JSON con el formato normalizado del backend y es obligatorio en las consultas `PRONOSTICO`. Nunca contiene la respuesta cruda de OpenWeather ni datos de la API key (E-03). | BD (CHECK) + Backend |
 
 ## Favoritos
 
@@ -97,6 +99,6 @@ Las reglas RN-BD-01 a RN-BD-34 provienen del análisis del modelo relacional y c
 | 02 | Favoritos |
 | 03, 31–32 | Lecturas |
 | 10–12 | Ubicaciones |
-| 13–15, 36 | Clima |
+| 13–15, 36, 42–43 | Clima |
 | 16–27, 33–35 | Alertas |
 | 28–30 | Dispositivos |
