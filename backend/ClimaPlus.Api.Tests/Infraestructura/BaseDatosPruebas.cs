@@ -63,6 +63,10 @@ public sealed class PostgreSqlFactAttribute : FactAttribute
 /// </summary>
 public sealed class BaseDatosPruebasFixture : IAsyncLifetime
 {
+    // xUnit ejecuta las clases de prueba en paralelo y EF Core 8 no bloquea la base al migrar: con una base
+    // _test vacía, dos clases creando las mismas tablas a la vez chocaban en PostgreSQL (pg_type_typname_nsp_index).
+    private static readonly SemaphoreSlim Migracion = new(1, 1);
+
     public async Task InitializeAsync()
     {
         if (!BaseDatosPruebas.Configurada)
@@ -70,8 +74,16 @@ public sealed class BaseDatosPruebasFixture : IAsyncLifetime
             return;
         }
 
-        await using var db = BaseDatosPruebas.CrearContexto();
-        await db.Database.MigrateAsync();
+        await Migracion.WaitAsync();
+        try
+        {
+            await using var db = BaseDatosPruebas.CrearContexto();
+            await db.Database.MigrateAsync();
+        }
+        finally
+        {
+            Migracion.Release();
+        }
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

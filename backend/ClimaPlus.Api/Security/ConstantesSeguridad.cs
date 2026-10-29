@@ -18,6 +18,8 @@ public static class PoliticasSeguridad
     public const string RateLimitAutenticacion = "autenticacion";
 
     public const string RateLimitClima = "clima";
+
+    public const string RateLimitDispositivos = "dispositivos";
 }
 
 /// <summary>Categoría de log para eventos de seguridad. Nunca registrar contraseñas ni tokens.</summary>

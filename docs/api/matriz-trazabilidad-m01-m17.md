@@ -1,6 +1,6 @@
 # Matriz de trazabilidad M01–M17 (backend)
 
-**Fecha:** 2026-10-28 (actualizada tras el historial 2G verificado y el motor de alertas 2H) · **Rama:** `feature/backend` · **Responsable:** Integrante 2 (backend)
+**Fecha:** 2026-10-29 (actualizada con el backend de dispositivos y lecturas, Fase 7) · **Rama:** `feature/backend` · **Responsable:** Integrante 2 (backend)
 **Fuentes:** `docs/fase-1/08-mockups.md` (M01–M15), `docs/enmiendas/E-01-perfil-usuario-m16-m17.md` (M16–M17), requisitos RF-01 a RF-30 de la auditoría del 2026-10-25, RF-31 a RF-33 de E-01, y el código actual de `backend/ClimaPlus.Api/Controllers`.
 
 ## Leyenda de estados
@@ -12,7 +12,7 @@
 | **Preparado** | DTO, servicios o interfaces listos y probados, pero sin endpoint, porque depende de E-02/E-03 |
 | **No implementado** | Sin código |
 
-Último resultado de pruebas confirmado: **308 aprobadas, 14 omitidas (PostgreSQL), 0 fallidas** (historial 2G, 2026-10-28, más Swagger). Las migraciones 002 y 003 están aplicadas en `climaplus_db`. El motor de alertas (2H, RF-16) está implementado sin verificar: se esperan **383 aprobadas y 17 omitidas** (400 en total).
+Último resultado de pruebas confirmado: **308 aprobadas, 14 omitidas (PostgreSQL), 0 fallidas** (historial 2G, 2026-10-28, más Swagger). Las migraciones 002 y 003 están aplicadas en `climaplus_db`. **2026-10-29:** el motor 2H quedó verificado (**400 aprobadas, 0 omitidas** en Windows con `climaplus_test`). La Fase 7 (dispositivos y lecturas) da **488 aprobadas, 0 omitidas** en Linux con PostgreSQL 16; falta confirmarlo en Windows. El motor de alertas (2H, RF-16) está implementado sin verificar: se esperan **383 aprobadas y 17 omitidas** (400 en total).
 
 ## Resumen por pantalla
 
@@ -28,8 +28,8 @@
 | M08 Historial | Usuario / Administrador (su cuenta) | RF-11 | Verificado (308 pruebas y Swagger) | — |
 | M09 Alertas | Usuario | RF-17, RF-18 | Verificado (221 pruebas); alertas reales con el motor 2H, sin verificar | — |
 | M10 Configuración de alertas | Usuario | RF-12 a RF-15 | Verificado (182 pruebas, 7 escenarios manuales) | — |
-| M11 Mis dispositivos | Usuario | RF-20, RF-21, RF-22 | No implementado | Fase de dispositivos |
-| M12 Detalle dispositivo | Usuario | RF-22, RF-23 | No implementado | Fase de dispositivos |
+| M11 Mis dispositivos | Usuario | RF-20, RF-21, RF-22 | Backend implementado (Fase 7), sin verificar en Windows; frontend con datos simulados | Pantalla React (Fase 7) |
+| M12 Detalle dispositivo | Usuario | RF-22, RF-23 | Backend implementado (Fase 7), sin verificar en Windows; frontend con datos simulados | Pantalla React (Fase 7) |
 | M13 Dashboard administrador | Administrador | RF-25 | No implementado | Datos de consultas (E-02/E-03) y dispositivos |
 | M14 Gestión de usuarios | Administrador | RF-26, RF-27, RF-28 | No implementado | Ninguno técnico (usa la tabla `usuario`) |
 | M15 Alertas del sistema | Administrador | RF-29 | Verificado (221 pruebas); alertas reales con el motor 2H, sin verificar | — |
@@ -59,16 +59,16 @@
 | M10 | RF-14 Editar regla | `PUT /api/configuraciones-alerta/{id}` | Autenticado | Verificado | ídem | — |
 | M10 | RF-14 Activar/pausar | `PATCH /api/configuraciones-alerta/{id}/estado` | Autenticado | Verificado | ídem | — |
 | M10 | RF-15 Eliminar regla | `DELETE /api/configuraciones-alerta/{id}` | Autenticado | Verificado | ídem | — |
-| M04 (toast), M09 | RF-16 Generar alertas (origen consulta) | Dentro de `GET /api/clima/actual` con sesión; respuesta `alertasGeneradas` | Autenticado | Implementado, sin verificar | `Alertas/EvaluadorAlertasTests`, `Alertas/MotorAlertasTests`, `Datos/MotorAlertasPostgreSqlTests` | Transacción + `pg_advisory_xact_lock`; sin migraciones. Origen ESP32 pendiente (RF-24) |
+| M04 (toast), M09 | RF-16 Generar alertas (origen consulta) | Dentro de `GET /api/clima/actual` con sesión; respuesta `alertasGeneradas` | Autenticado | Implementado, sin verificar | `Alertas/EvaluadorAlertasTests`, `Alertas/MotorAlertasTests`, `Datos/MotorAlertasPostgreSqlTests` | Transacción + `pg_advisory_xact_lock`; sin migraciones. Origen ESP32 implementado en la Fase 7 (RF-24) |
 | M09, M06, navbar | RF-17 Listar mis alertas | `GET /api/alertas?estado=&tipo=&pagina=` | Autenticado | Verificado | `Alertas/AlertasTests`, `Alertas/MotorAlertasTests` | Con alertas reales desde 2H |
 | navbar, M06 | RF-17 Contador | `GET /api/alertas/contador` | Autenticado | Verificado | ídem | Sube con cada alerta del motor (2H) |
 | M09 | RF-18 Marcar como leída | `PATCH /api/alertas/{id}/estado` | Autenticado | Verificado | ídem | La auditoría proponía `/leida`; se usó `/estado` según la autorización de esta fase |
 | M06 | RF-19 Dashboard usuario | Reutiliza RF-08, RF-17 y RF-20 | Autenticado | Parcial | — | Falta RF-20 (dispositivos) |
-| M11, M06 | RF-20 Listar dispositivos | `GET /api/dispositivos` | Autenticado | No implementado | — | Fase de dispositivos |
-| M11 | RF-21 Registrar dispositivo | `POST /api/dispositivos` | Autenticado | No implementado | — | API Key mostrada una vez; solo hash SHA-256 (RN-BD-28) |
-| M11, M12 | RF-22 Editar y activar/desactivar | `PUT /api/dispositivos/{id}`, `PATCH /api/dispositivos/{id}/estado` | Autenticado | No implementado | — | — |
-| M12 | RF-23 Detalle y lecturas | `GET /api/dispositivos/{id}`, `GET /api/dispositivos/{id}/lecturas` | Autenticado (dueño) | No implementado | — | Las alertas del dispositivo pueden reutilizar `AlertaService` filtrando por origen |
-| — | RF-24 Recibir lecturas del ESP32 | `POST /api/lecturas` con `X-Device-Key` | Dispositivo | No implementado | — | Fase posterior; genera alertas (RN-BD-33) |
+| M11, M06 | RF-20 Listar dispositivos | `GET /api/dispositivos` | Autenticado | Implementado, sin verificar | `Dispositivos/DispositivosTests`, `Datos/LecturasPostgreSqlTests` | `enLinea` = lectura en los últimos 5 min (DP-F7-1) |
+| M11 | RF-21 Registrar dispositivo | `POST /api/dispositivos` | Autenticado | Implementado, sin verificar | `Dispositivos/DispositivosTests`, `Dispositivos/ApiKeyDispositivoTests` | API Key mostrada una vez; solo hash SHA-256 (RN-BD-28) |
+| M11, M12 | RF-22 Editar y activar/desactivar | `PUT /api/dispositivos/{id}`, `PATCH /api/dispositivos/{id}/estado` | Autenticado | Implementado, sin verificar | `Dispositivos/DispositivosTests` | Desactivar revoca la API Key (D-11) |
+| M12 | RF-23 Detalle, lecturas y alertas | `GET /api/dispositivos/{id}`, `GET /api/dispositivos/{id}/lecturas`, `GET /api/dispositivos/{id}/alertas` | Autenticado (dueño) | Implementado, sin verificar | `Dispositivos/DispositivosTests`, `Dispositivos/LecturasTests` | Paginación de 20 |
+| — | RF-24 Recibir lecturas del ESP32 | `POST /api/lecturas` con `X-Device-Key` | Dispositivo | Implementado, sin verificar | `Dispositivos/LecturasTests`, `Alertas/EvaluadorAlertasLecturaTests`, `Datos/LecturasPostgreSqlTests` | Genera alertas (RN-BD-33); rate limiting 30/min por dispositivo |
 | M13 | RF-25 Estadísticas | `GET /api/admin/estadisticas?periodo=` | Administrador | No implementado | — | Consultas por periodo y top 5 dependen de E-02/E-03; dispositivos |
 | M14 | RF-26 Listar y filtrar usuarios | `GET /api/admin/usuarios` | Administrador | No implementado | — | Sin bloqueo técnico; paginación de 20 |
 | M14 | RF-27 Cambiar rol | `PATCH /api/admin/usuarios/{id}/rol` | Administrador | No implementado | — | RN-BD-09: no degradar al último administrador activo |
@@ -86,15 +86,15 @@
 |---|---|---|---|
 | Clima persistido | RF-05, RF-06 | Verificado (2E) | — |
 | Historial | RF-11 | Verificado (2G) | — |
-| Motor de alertas | RF-16 | Implementado (2H) para el origen consulta, sin verificar | RF-24 para el origen lectura |
+| Motor de alertas | RF-16, RF-24 | Implementado para ambos orígenes (consulta 2H, lectura Fase 7) | — |
 | Gestión de usuarios | RF-26, RF-27, RF-28 | **Sí**: usa solo la tabla `usuario` | — |
-| Dispositivos | RF-20 a RF-23 | **Sí**: usa `dispositivo` y `lectura_sensor` del modelo actual | Decidir cuándo empieza la fase de dispositivos |
-| Lecturas ESP32 | RF-24 | Sí, técnicamente | Fase posterior según el alcance aprobado |
+| Dispositivos | RF-20 a RF-23 | Backend implementado (Fase 7) | Pantallas M11 y M12 en React |
+| Lecturas ESP32 | RF-24 | Backend implementado (Fase 7) | Firmware del ESP32 |
 | Estadísticas | RF-25 | Sí (usuarios, consultas y alertas); dispositivos cuando exista RF-20 | — |
 
 ## Funciones pendientes por tipo
 
-- **Dispositivos ESP32:** RF-20 a RF-24 (M11, M12, lecturas). Nada implementado.
+- **Dispositivos ESP32:** RF-20 a RF-24 con backend implementado en la Fase 7 (`contrato-dispositivos-lecturas.md`). Faltan las pantallas M11/M12 y el firmware.
 - **Administración:** RF-26 a RF-28 (M14). Nada implementado; RF-29 (M15) implementado sin verificar.
 - **Estadísticas:** RF-25 (M13). Nada implementado.
 - **Usuario:** RF-16 (motor) implementado sin verificar; falta su origen ESP32. RF-19 (M06) parcial.

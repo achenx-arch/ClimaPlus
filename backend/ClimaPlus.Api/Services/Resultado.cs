@@ -16,6 +16,12 @@ public enum TipoError
 
     /// <summary>El proveedor externo devolvió datos inválidos (502).</summary>
     RespuestaProveedorInvalida,
+
+    /// <summary>Falta la API Key del dispositivo o no corresponde a ninguno (401).</summary>
+    DispositivoNoAutenticado,
+
+    /// <summary>El dispositivo o la cuenta de su dueño están desactivados (403, D-11, RN-BD-29).</summary>
+    DispositivoDesactivado,
 }
 
 /// <summary>Error de negocio devuelto por un servicio. Campo = nombre del campo JSON afectado, si aplica.</summary>

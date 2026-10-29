@@ -67,6 +67,26 @@ public sealed class AlertaService
         return Resultado<AlertaResponse>.Ok(respuesta);
     }
 
+    /// <summary>
+    /// Alertas originadas por las lecturas de un dispositivo del usuario (M12, RF-23). Un dispositivo ajeno o
+    /// inexistente responde 404, igual que el resto de recursos propios.
+    /// </summary>
+    public async Task<Resultado<PaginaResponse<AlertaResponse>>> ListarPorDispositivoAsync(
+        long idUsuario, long idDispositivo, int pagina, CancellationToken cancelacion)
+    {
+        if (!await _db.Dispositivos.AnyAsync(d => d.IdDispositivo == idDispositivo && d.IdUsuario == idUsuario, cancelacion))
+        {
+            return Resultado<PaginaResponse<AlertaResponse>>.Falla(new ErrorServicio(TipoError.NoEncontrado, "El dispositivo no existe."));
+        }
+
+        var consulta = _db.Alertas.AsNoTracking()
+            .Where(a => a.IdUsuario == idUsuario && a.Lectura != null && a.Lectura.IdDispositivo == idDispositivo);
+        var total = await consulta.CountAsync(cancelacion);
+
+        var elementos = await ProyectarUsuario(Paginar(consulta, pagina)).ToListAsync(cancelacion);
+        return Resultado<PaginaResponse<AlertaResponse>>.Ok(PaginaResponse<AlertaResponse>.Crear(elementos, pagina, total));
+    }
+
     // ------------------------------------------------------------------ Administrador (M15, solo lectura)
 
     public async Task<Resultado<PaginaResponse<AlertaAdminResponse>>> ListarAdminAsync(FiltroAlertasAdminRequest filtro, CancellationToken cancelacion)
