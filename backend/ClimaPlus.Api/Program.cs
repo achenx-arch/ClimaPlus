@@ -1,8 +1,14 @@
 using ClimaPlus.Api.Data;
+using ClimaPlus.Api.Integraciones.OpenWeather;
 using ClimaPlus.Api.Security;
 using ClimaPlus.Api.Services;
+using ClimaPlus.Api.Services.Alertas;
+using ClimaPlus.Api.Services.Clima;
+using ClimaPlus.Api.Services.Favoritos;
+using ClimaPlus.Api.Services.Historial;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +29,29 @@ builder.Services.AddClimaPlusSeguridad(builder.Configuration);
 // Servicios de negocio (Fase 2D).
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UsuarioService>();
+
+// OpenWeather (Fase 2E). La API key solo en User Secrets: OpenWeather:ApiKey.
+builder.Services.AddOpenWeather(builder.Configuration);
+builder.Services.AddSingleton<CacheBusquedaUbicaciones>();
+builder.Services.AddScoped<UbicacionService>();
+builder.Services.AddScoped<IRegistroConsultaClima, RegistroConsultaClima>();
+builder.Services.AddScoped<ClimaService>();
+builder.Services.TryAddSingleton(TimeProvider.System);
+
+// Favoritos (Fase 2F).
+builder.Services.AddScoped<FavoritoService>();
+
+// Historial de consultas (Fase 2G).
+builder.Services.AddScoped<HistorialService>();
+
+// Configuración de alertas (Fase 2H).
+builder.Services.AddScoped<ConfiguracionAlertaService>();
+
+// Alertas generadas: consulta y estado (M09, M15).
+builder.Services.AddScoped<AlertaService>();
+
+// Motor de alertas (Fase 2H, RF-16): se ejecuta dentro de GET /api/clima/actual, sin tareas en segundo plano (D-02).
+builder.Services.AddScoped<IMotorAlertas, MotorAlertas>();
 
 // Errores de validación con nombres de campo en camelCase (los mismos del JSON).
 builder.Services.AddControllers(opciones =>
