@@ -1,15 +1,35 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import "./Login.css";
-import { iniciarSesion } from "../services/authService";
+import { useAuth } from "../context/auth";
+import { ApiError, mensajeDeError } from "../services/apiClient";
+import EnlaceVolver from "../components/EnlaceVolver";
 
 export default function Login() {
+  const { estado, usuario, iniciarSesion, mensajeSesion, limpiarMensajeSesion } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const estadoNavegacion = location.state as { desde?: string; mensaje?: string } | null;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [bloqueadoHasta, setBloqueadoHasta] = useState<number | null>(null);
+
+  // "Cuenta creada, inicia sesión" (M03) o "Tu sesión expiró" (401 / expiraEn).
+  const aviso = estadoNavegacion?.mensaje ?? mensajeSesion;
+
+  // 429: el botón se deshabilita los segundos de Retry-After (contrato-auth-perfil.md).
+  useEffect(() => {
+    if (bloqueadoHasta === null) return;
+    const restante = bloqueadoHasta - Date.now();
+    const temporizador = window.setTimeout(() => setBloqueadoHasta(null), Math.max(0, restante));
+    return () => window.clearTimeout(temporizador);
+  }, [bloqueadoHasta]);
 
 const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
   e.preventDefault();
@@ -34,34 +54,41 @@ if (
   }
   setLoading(true);
   try {
-    const respuesta = await iniciarSesion({
-      correo: email.trim(),
-      password: password,
-    });
+    const usuario = await iniciarSesion(email.trim(), password, remember);
+    limpiarMensajeSesion();
+    setPassword("");
 
-    console.log("Inicio de sesión correcto:", {
-      usuario: respuesta.usuario.nombre,
-      rol: respuesta.usuario.rol,
-    });
-
-    alert(`Bienvenido a ClimaPlus, ${respuesta.usuario.nombre}`);
-
+    // USUARIO → M06, ADMINISTRADOR → M13, o la ruta privada que se pidió antes del login.
+    const destino =
+      estadoNavegacion?.desde ??
+      (usuario.rol === "ADMINISTRADOR" ? "/admin" : "/dashboard");
+    navigate(destino, { replace: true });
   } catch (error) {
-    if (error instanceof TypeError) {
-      setError(
-        "No se pudo conectar con el servidor. Verifica que el backend esté disponible."
-      );
+    if (error instanceof ApiError && error.status === 401) {
+      setError("Correo o contraseña incorrectos.");
+    } else if (error instanceof ApiError && error.status === 403) {
+      setError("Tu cuenta está desactivada. Contacta al administrador.");
+    } else if (error instanceof ApiError && error.status === 429) {
+      setError(error.message);
+      setBloqueadoHasta(Date.now() + (error.retryAfterSegundos ?? 60) * 1000);
     } else {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "No se pudo iniciar sesión."
-      );
+      setError(mensajeDeError(error, "No se pudo iniciar sesión."));
     }
   } finally {
     setLoading(false);
   }
 };
+
+  // Con la sesión ya iniciada no se muestra el formulario: para entrar con otra cuenta,
+  // primero se cierra la sesión actual.
+  if (estado === "autenticado" && usuario) {
+    return (
+      <Navigate
+        to={estadoNavegacion?.desde ?? (usuario.rol === "ADMINISTRADOR" ? "/admin" : "/dashboard")}
+        replace
+      />
+    );
+  }
 
   return (
     <main className="login-page">
@@ -104,6 +131,8 @@ if (
         </div>
 
         <div className="login-form-container">
+          <EnlaceVolver to="/">Volver al Inicio</EnlaceVolver>
+
           <h2>Bienvenido de nuevo</h2>
           <p className="login-subtitle">
             Ingresa tus datos para continuar.
@@ -182,6 +211,12 @@ if (
               </Link>
             </div>
 
+            {aviso && !error && (
+              <div className="alert alert-info py-2" role="status">
+                {aviso}
+              </div>
+            )}
+
             {error && (
               <div className="login-error" role="alert">
                 {error}
@@ -191,7 +226,7 @@ if (
 <button
   type="submit"
   className="login-submit"
-  disabled={loading}
+  disabled={loading || bloqueadoHasta !== null}
 >
   {loading ? "Iniciando sesión..." : "Iniciar sesión"}
 
@@ -207,4 +242,4 @@ if (
       </section>
     </main>
   );
-}
+}

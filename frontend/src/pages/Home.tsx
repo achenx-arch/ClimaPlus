@@ -1,22 +1,25 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import './Home.css'
 
 function Home() {
   const [ciudad, setCiudad] = useState('')
+  const [error, setError] = useState('')
+  const navigate = useNavigate()
 
+  // M01 → M04: la búsqueda se resuelve en /clima con GET /api/clima/ubicaciones.
   const consultarClima = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
     const busqueda = ciudad.trim()
 
     if (!busqueda) {
-      alert('Por favor, ingresa una ciudad.')
+      setError('Por favor, ingresa una ciudad.')
       return
     }
 
-    // La consulta real se conectará posteriormente con el backend.
-    alert(`Próximamente podrás consultar el clima de ${busqueda}.`)
+    setError('')
+    navigate(`/clima?q=${encodeURIComponent(busqueda)}`)
   }
 
   return (
@@ -55,7 +58,7 @@ function Home() {
 
                 <input
                   type="text"
-                  placeholder="Ciudad, municipio o código postal"
+                  placeholder="Ciudad o municipio"
                   value={ciudad}
                   onChange={(e) => setCiudad(e.target.value)}
                   aria-label="Buscar ciudad"
@@ -65,6 +68,10 @@ function Home() {
                   Consultar clima
                 </button>
               </form>
+
+              {error && (
+                <p className="text-danger small mt-2" role="alert">{error}</p>
+              )}
 
               <div className="home-benefits">
                 <span>
@@ -245,4 +252,4 @@ function Home() {
   )
 }
 
-export default Home
+export default Home

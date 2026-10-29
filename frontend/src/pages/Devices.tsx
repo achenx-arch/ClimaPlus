@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "./Alerts.css";
 import "./Devices.css";
 
@@ -94,22 +94,6 @@ export default function Devices() {
 
   const desconectados = dispositivos.length - conectados;
 
-  const alertasNuevas = (() => {
-    try {
-      const guardadas = localStorage.getItem("climaplus_alertas");
-
-      if (!guardadas) return 2;
-
-      const datos = JSON.parse(guardadas);
-
-      if (!Array.isArray(datos)) return 2;
-
-      return datos.filter((alerta) => !alerta.leida).length;
-    } catch {
-      return 2;
-    }
-  })();
-
   const guardarDispositivos = (actualizados: Dispositivo[]) => {
     setDispositivos(actualizados);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(actualizados));
@@ -169,71 +153,17 @@ export default function Devices() {
   return (
     <main className="devices-page">
       <div className="alerts-layout">
-        {/* MENÚ LATERAL */}
-        <aside className="alerts-sidebar">
-          <span className="alerts-sidebar-title">MI ESPACIO</span>
-
-          <nav className="alerts-sidebar-nav">
-            <NavLink to="/dashboard">
-              <i className="bi bi-grid"></i>
-              Dashboard
-            </NavLink>
-
-            <NavLink to="/clima">
-              <i className="bi bi-cloud-sun"></i>
-              Clima
-            </NavLink>
-
-            <NavLink to="/pronostico">
-              <i className="bi bi-calendar3"></i>
-              Pronóstico
-            </NavLink>
-
-            <NavLink to="/favoritos">
-              <i className="bi bi-star"></i>
-              Favoritos
-            </NavLink>
-
-            <NavLink to="/historial">
-              <i className="bi bi-clock-history"></i>
-              Historial
-            </NavLink>
-
-            <NavLink to="/alertas">
-              <i className="bi bi-bell"></i>
-              Alertas
-              {alertasNuevas > 0 && (
-                <span className="alerts-sidebar-count">
-                  {alertasNuevas}
-                </span>
-              )}
-            </NavLink>
-
-            <NavLink to="/dispositivos">
-              <i className="bi bi-display"></i>
-              Mis dispositivos
-            </NavLink>
-          </nav>
-
-          <div className="alerts-sidebar-bottom">
-            <NavLink to="/perfil">
-              <i className="bi bi-person"></i>
-              Perfil
-            </NavLink>
-
-            <button
-              type="button"
-              disabled
-              title="Disponible al conectar el inicio de sesión"
-            >
-              <i className="bi bi-box-arrow-right"></i>
-              Cerrar sesión
-            </button>
-          </div>
-        </aside>
 
         {/* CONTENIDO */}
         <div className="devices-container">
+          {/* Módulo ESP32 pendiente: estos datos son de demostración (fase de dispositivos). */}
+          <div className="alert alert-warning d-flex gap-2 align-items-start" role="note">
+            <i className="bi bi-hourglass-split" aria-hidden="true"></i>
+            <span>
+              Módulo pendiente (dispositivos ESP32, RF-20 a RF-24). Los datos de esta pantalla son de
+              demostración: se guardan solo en este navegador y no se envían al servidor.
+            </span>
+          </div>
           <span className="devices-label">DISPOSITIVOS</span>
 
           <div className="devices-header">
@@ -530,4 +460,4 @@ export default function Devices() {
       )}
     </main>
   );
-}
+}

@@ -1,48 +1,21 @@
 import { useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "./AlertSettings.css";
 import "./Alerts.css";
-
-type TipoAlerta = "LLUVIA" | "TEMPERATURA_ALTA" | "TEMPERATURA_BAJA";
-
-type Configuracion = {
-  id: number;
-  ubicacion: string;
-  tipo: TipoAlerta;
-  umbral: number | null;
-  activa: boolean;
-};
-
-const configuracionesIniciales: Configuracion[] = [
-  {
-    id: 1,
-    ubicacion: "Antigua Guatemala",
-    tipo: "LLUVIA",
-    umbral: null,
-    activa: true,
-  },
-  {
-    id: 2,
-    ubicacion: "Ciudad de Guatemala",
-    tipo: "TEMPERATURA_ALTA",
-    umbral: 30,
-    activa: true,
-  },
-  {
-    id: 3,
-    ubicacion: "Quetzaltenango",
-    tipo: "TEMPERATURA_BAJA",
-    umbral: 14,
-    activa: true,
-  },
-  {
-    id: 4,
-    ubicacion: "Todas mis ubicaciones",
-    tipo: "TEMPERATURA_ALTA",
-    umbral: 35,
-    activa: false,
-  },
-];
+import { useAuth } from "../context/auth";
+import { useNotificaciones } from "../context/notificaciones";
+import { useConsulta } from "../hooks/useConsulta";
+import { ApiError, mensajeDeError } from "../services/apiClient";
+import {
+  actualizarConfiguracion,
+  cambiarEstadoConfiguracion,
+  crearConfiguracion,
+  eliminarConfiguracion,
+  listarConfiguraciones,
+} from "../services/configuracionAlertasService";
+import { listarFavoritos } from "../services/favoritosService";
+import type { ConfiguracionAlerta, TipoAlerta, Ubicacion } from "../types/api";
+import { NOMBRES_TIPO_ALERTA, lugar } from "../utils/clima";
 
 const nombresTipos: Record<TipoAlerta, string> = {
   LLUVIA: "LLUVIA",
@@ -50,38 +23,45 @@ const nombresTipos: Record<TipoAlerta, string> = {
   TEMPERATURA_BAJA: "TEMPERATURA_BAJA",
 };
 
-function cargarConfiguraciones(): Configuracion[] {
-  try {
-    const guardadas = localStorage.getItem(
-      "climaplus_reglas_alertas"
-    );
-
-    if (guardadas !== null) {
-      const datos = JSON.parse(guardadas);
-
-      if (Array.isArray(datos)) {
-        return datos;
-      }
-    }
-  } catch {
-    console.error("No se pudieron cargar las configuraciones");
+/** Umbral válido: número entre -50 y 60 con hasta 2 decimales (RN-BD-18). */
+function validarUmbral(texto: string): string | null {
+  const valor = Number(texto);
+  if (texto.trim() === "" || !Number.isFinite(valor) || valor < -50 || valor > 60) {
+    return "Ingresa una temperatura válida entre -50 y 60 °C.";
   }
-
-  return configuracionesIniciales;
+  if (!/^-?\d+(\.\d{1,2})?$/.test(texto.trim())) {
+    return "El umbral admite como máximo 2 decimales.";
+  }
+  return null;
 }
 
+// M10 – Configuración de alertas: /api/configuraciones-alerta (listar, crear, editar,
+// activar/pausar y eliminar). Las reglas validan en el backend RN-BD-16 a RN-BD-21.
 export default function AlertSettings() {
-  const [configuraciones, setConfiguraciones] =
-    useState<Configuracion[]>(cargarConfiguraciones);
+  const { usuario } = useAuth();
+  const { avisar } = useNotificaciones();
+
+  const reglas = useConsulta(`configuraciones:${usuario?.idUsuario}`, (signal) => listarConfiguraciones(signal));
+  const favoritos = useConsulta(`favoritos:${usuario?.idUsuario}`, (signal) => listarFavoritos(signal));
+  const configuraciones: ConfiguracionAlerta[] = reglas.datos ?? [];
 
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
 
-  const [ubicacion, setUbicacion] = useState("Ciudad de Guatemala");
+  const [ubicacion, setUbicacion] = useState("");
   const [tipo, setTipo] = useState<TipoAlerta>("TEMPERATURA_ALTA");
   const [umbral, setUmbral] = useState("30");
   const [activa, setActiva] = useState(true);
   const [mensaje, setMensaje] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [procesando, setProcesando] = useState<number | null>(null);
+
+  // Ubicaciones elegibles: favoritos y las ya usadas en reglas (todas vienen de la búsqueda, D-22).
+  const opcionesUbicacion = new Map<number, Ubicacion>();
+  for (const favorito of favoritos.datos ?? []) opcionesUbicacion.set(favorito.ubicacion.idUbicacion, favorito.ubicacion);
+  for (const regla of configuraciones) {
+    if (regla.ubicacion) opcionesUbicacion.set(regla.ubicacion.idUbicacion, regla.ubicacion);
+  }
 
   const activas = configuraciones.filter(
     (configuracion) => configuracion.activa
@@ -89,16 +69,9 @@ export default function AlertSettings() {
 
   const inactivas = configuraciones.length - activas;
 
-  const guardarEnLocalStorage = (datos: Configuracion[]) => {
-    localStorage.setItem(
-      "climaplus_reglas_alertas",
-      JSON.stringify(datos)
-    );
-  };
-
   const abrirFormularioNuevo = () => {
     setEditandoId(null);
-    setUbicacion("Ciudad de Guatemala");
+    setUbicacion("");
     setTipo("TEMPERATURA_ALTA");
     setUmbral("30");
     setActiva(true);
@@ -106,14 +79,14 @@ export default function AlertSettings() {
     setMostrarFormulario(true);
   };
 
-  const editarConfiguracion = (configuracion: Configuracion) => {
-    setEditandoId(configuracion.id);
-    setUbicacion(configuracion.ubicacion);
+  const editarConfiguracion = (configuracion: ConfiguracionAlerta) => {
+    setEditandoId(configuracion.idConfiguracion);
+    setUbicacion(configuracion.ubicacion ? String(configuracion.ubicacion.idUbicacion) : "");
     setTipo(configuracion.tipo);
     setUmbral(
-      configuracion.umbral === null
+      configuracion.valorUmbral === null
         ? ""
-        : String(configuracion.umbral)
+        : String(configuracion.valorUmbral)
     );
     setActiva(configuracion.activa);
     setMensaje("");
@@ -125,127 +98,81 @@ export default function AlertSettings() {
     setEditandoId(null);
   };
 
-  const cambiarEstado = (id: number) => {
-    const actualizadas = configuraciones.map((configuracion) =>
-      configuracion.id === id
-        ? { ...configuracion, activa: !configuracion.activa }
-        : configuracion
+  const reemplazar = (actualizada: ConfiguracionAlerta) =>
+    reglas.actualizar((actuales) =>
+      actuales?.map((c) => (c.idConfiguracion === actualizada.idConfiguracion ? actualizada : c))
     );
 
-    setConfiguraciones(actualizadas);
-    guardarEnLocalStorage(actualizadas);
+  const cambiarEstado = async (configuracion: ConfiguracionAlerta) => {
+    setProcesando(configuracion.idConfiguracion);
+    try {
+      reemplazar(await cambiarEstadoConfiguracion(configuracion.idConfiguracion, !configuracion.activa));
+      avisar(configuracion.activa ? "Regla pausada" : "Regla activada");
+    } catch (error) {
+      avisar(mensajeDeError(error, "No se pudo cambiar el estado de la regla."), "error");
+      if (error instanceof ApiError && error.status === 404) reglas.recargar();
+    } finally {
+      setProcesando(null);
+    }
   };
 
-  const guardarConfiguracion = (e: React.FormEvent<HTMLFormElement>) => {
+  const eliminar = async (configuracion: ConfiguracionAlerta) => {
+    const descripcion = `${NOMBRES_TIPO_ALERTA[configuracion.tipo]} · ${configuracion.ubicacion?.nombre ?? "Todas mis ubicaciones"}`;
+    if (!window.confirm(`¿Eliminar la regla "${descripcion}"?`)) return;
+    setProcesando(configuracion.idConfiguracion);
+    try {
+      await eliminarConfiguracion(configuracion.idConfiguracion);
+      reglas.actualizar((actuales) => actuales?.filter((c) => c.idConfiguracion !== configuracion.idConfiguracion));
+      avisar("Regla eliminada");
+    } catch (error) {
+      avisar(mensajeDeError(error, "No se pudo eliminar la regla."), "error");
+      if (error instanceof ApiError && error.status === 404) reglas.recargar();
+    } finally {
+      setProcesando(null);
+    }
+  };
+
+  const guardarConfiguracion = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setMensaje("");
 
     const requiereUmbral = tipo !== "LLUVIA";
-    const valorUmbral = requiereUmbral ? Number(umbral) : null;
-
-    if (
-      requiereUmbral &&
-      (umbral.trim() === "" ||
-        !Number.isFinite(valorUmbral) ||
-        valorUmbral === null ||
-        valorUmbral < -50 ||
-        valorUmbral > 60)
-    ) {
-      setMensaje("Ingresa una temperatura válida entre -50 y 60 °C.");
-      return;
+    if (requiereUmbral) {
+      const invalido = validarUmbral(umbral);
+      if (invalido) {
+        setMensaje(invalido);
+        return;
+      }
     }
 
-    let actualizadas: Configuracion[];
+    const datos = {
+      tipo,
+      idUbicacion: ubicacion ? Number(ubicacion) : null,
+      valorUmbral: requiereUmbral ? Number(umbral) : null,
+      activa,
+    };
 
-    if (editandoId !== null) {
-      actualizadas = configuraciones.map((configuracion) =>
-        configuracion.id === editandoId
-          ? {
-              ...configuracion,
-              ubicacion,
-              tipo,
-              umbral: valorUmbral,
-              activa,
-            }
-          : configuracion
-      );
-    } else {
-      const nuevaConfiguracion: Configuracion = {
-        id: Date.now(),
-        ubicacion,
-        tipo,
-        umbral: valorUmbral,
-        activa,
-      };
-
-      actualizadas = [...configuraciones, nuevaConfiguracion];
+    setGuardando(true);
+    try {
+      if (editandoId !== null) {
+        reemplazar(await actualizarConfiguracion(editandoId, datos));
+      } else {
+        const nueva = await crearConfiguracion(datos);
+        reglas.actualizar((actuales) => [...(actuales ?? []), nueva]);
+      }
+      cerrarFormulario();
+      avisar("Configuración guardada correctamente.");
+    } catch (error) {
+      // 400 (validación) y 409 (RN-BD-19 duplicada o RN-BD-21 alta ≤ baja) traen el mensaje del backend.
+      setMensaje(mensajeDeError(error, "No se pudo guardar la configuración."));
+    } finally {
+      setGuardando(false);
     }
-
-    setConfiguraciones(actualizadas);
-    guardarEnLocalStorage(actualizadas);
-    cerrarFormulario();
-    setMensaje("Configuración guardada correctamente.");
   };
 return (
   <main className="alert-settings-page">
     <div className="alerts-layout">
 
-      {/* MENÚ LATERAL */}
-      <aside className="alerts-sidebar">
-        <span className="alerts-sidebar-title">MI ESPACIO</span>
-
-        <nav className="alerts-sidebar-nav">
-          <NavLink to="/dashboard">
-            <i className="bi bi-grid"></i>
-            Dashboard
-          </NavLink>
-
-          <NavLink to="/clima">
-            <i className="bi bi-cloud-sun"></i>
-            Clima
-          </NavLink>
-
-          <NavLink to="/pronostico">
-            <i className="bi bi-calendar3"></i>
-            Pronóstico
-          </NavLink>
-
-          <NavLink to="/favoritos">
-            <i className="bi bi-star"></i>
-            Favoritos
-          </NavLink>
-
-          <NavLink to="/historial">
-            <i className="bi bi-clock-history"></i>
-            Historial
-          </NavLink>
-
-          <NavLink to="/alertas" className="active">
-            <i className="bi bi-bell"></i>
-            Alertas
-          </NavLink>
-
-          <NavLink to="/dispositivos">
-            <i className="bi bi-display"></i>
-            Mis dispositivos
-          </NavLink>
-        </nav>
-
-        <div className="alerts-sidebar-bottom">
-          <NavLink to="/perfil">
-            <i className="bi bi-person"></i>
-            Perfil
-          </NavLink>
-
-          <button
-            type="button"
-            disabled
-            title="Disponible al conectar el inicio de sesión"
-          >
-            <i className="bi bi-box-arrow-right"></i>
-            Cerrar sesión
-          </button>
-        </div>
-      </aside>
 
       {/* CONTENIDO PRINCIPAL */}
       <div className="alert-settings-container">
@@ -298,9 +225,31 @@ return (
               </thead>
 
               <tbody>
+                {reglas.cargando && !reglas.datos && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-3">Cargando configuraciones...</td>
+                  </tr>
+                )}
+
+                {reglas.error !== undefined && (
+                  <tr>
+                    <td colSpan={5} className="text-danger py-3" role="alert">
+                      {mensajeDeError(reglas.error, "No se pudieron cargar tus configuraciones.")}
+                    </td>
+                  </tr>
+                )}
+
+                {reglas.datos !== undefined && configuraciones.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-3">
+                      Aún no tienes reglas. Usa "Nueva configuración" para crear la primera.
+                    </td>
+                  </tr>
+                )}
+
                 {configuraciones.map((configuracion) => (
-                  <tr key={configuracion.id}>
-                    <td>{configuracion.ubicacion}</td>
+                  <tr key={configuracion.idConfiguracion}>
+                    <td>{configuracion.ubicacion?.nombre ?? "Todas mis ubicaciones"}</td>
 
                     <td>
                       <span className="alert-settings-type">
@@ -309,9 +258,9 @@ return (
                     </td>
 
                     <td>
-                      {configuracion.umbral === null
+                      {configuracion.valorUmbral === null
                         ? "No aplica"
-                        : `${configuracion.umbral} °C`}
+                        : `${configuracion.valorUmbral} °C`}
                     </td>
 
                     <td>
@@ -337,13 +286,20 @@ return (
 
                         <button
                           type="button"
-                          onClick={() =>
-                            cambiarEstado(configuracion.id)
-                          }
+                          onClick={() => void cambiarEstado(configuracion)}
+                          disabled={procesando === configuracion.idConfiguracion}
                         >
                           {configuracion.activa
                             ? "Desactivar"
                             : "Activar"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void eliminar(configuracion)}
+                          disabled={procesando === configuracion.idConfiguracion}
+                        >
+                          Eliminar
                         </button>
                       </div>
                     </td>
@@ -363,16 +319,11 @@ return (
             <span>
               LLUVIA detecta la presencia de lluvia y no solicita un
               umbral numérico. Las alertas de temperatura utilizan
-              valores en °C.
+              valores en °C. Una regla de una ubicación prevalece sobre
+              la regla de "Todas mis ubicaciones" del mismo tipo.
             </span>
           </div>
         </section>
-
-        {mensaje && (
-          <p className="alert-settings-message" role="status">
-            {mensaje}
-          </p>
-        )}
 
         {mostrarFormulario && (
           <div
@@ -403,7 +354,7 @@ return (
                 </button>
               </div>
 
-              <form onSubmit={guardarConfiguracion}>
+              <form onSubmit={guardarConfiguracion} noValidate>
                 <div className="alert-settings-field">
                   <label htmlFor="alert-location">Ubicación</label>
 
@@ -412,14 +363,18 @@ return (
                     value={ubicacion}
                     onChange={(e) => setUbicacion(e.target.value)}
                   >
-                    <option>Ciudad de Guatemala</option>
-                    <option>Antigua Guatemala</option>
-                    <option>Quetzaltenango</option>
-                    <option>Todas mis ubicaciones</option>
+                    <option value="">Todas mis ubicaciones</option>
+                    {[...opcionesUbicacion.values()].map((opcion) => (
+                      <option key={opcion.idUbicacion} value={opcion.idUbicacion}>
+                        {opcion.nombre}
+                        {lugar(opcion) ? ` (${lugar(opcion)})` : ""}
+                      </option>
+                    ))}
                   </select>
 
                   <small>
-                    Selecciona una ubicación o todas tus ubicaciones.
+                    Selecciona una de tus ubicaciones favoritas o todas tus ubicaciones.
+                    Para otra ciudad, agrégala primero a <Link to="/favoritos">favoritos</Link>.
                   </small>
                 </div>
 
@@ -463,7 +418,7 @@ return (
                         type="number"
                         min="-50"
                         max="60"
-                        step="0.1"
+                        step="0.01"
                         value={umbral}
                         onChange={(e) => setUmbral(e.target.value)}
                         required
@@ -504,8 +459,9 @@ return (
                   <button
                     type="submit"
                     className="alert-settings-save"
+                    disabled={guardando}
                   >
-                    Guardar configuración
+                    {guardando ? "Guardando..." : "Guardar configuración"}
                   </button>
                 </div>
               </form>
@@ -514,10 +470,10 @@ return (
         )}
 
         <footer className="alert-settings-footer">
-          Datos de ejemplo · ClimaPlus Fase 1 · Octubre 2026
+          Las alertas se evalúan al consultar el clima actual con tu sesión · ClimaPlus
         </footer>
         </div>
     </div>
   </main>
 );
-}
+}

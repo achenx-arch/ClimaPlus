@@ -1,103 +1,67 @@
 import { Link } from "react-router-dom";
-import AdminSidebar from "../components/AdminSidebar";
 import "./AdminDashboard.css";
+import { useConsulta } from "../hooks/useConsulta";
+import { mensajeDeError } from "../services/apiClient";
+import { listarAlertasAdmin } from "../services/alertasService";
+import { NOMBRES_TIPO_ALERTA } from "../utils/clima";
+import { fechaHora } from "../utils/fechas";
 
-const estadisticas = [
+/** Módulos de administración y su estado real en el backend. */
+const MODULOS = [
   {
-    titulo: "Usuarios registrados",
-    valor: "128",
-    descripcion: "Cuentas del sistema",
-    icono: "bi-people",
-    color: "blue",
-  },
-  {
-    titulo: "Usuarios activos",
-    valor: "116",
-    descripcion: "Cuentas habilitadas",
-    icono: "bi-person",
-    color: "cyan",
-  },
-  {
-    titulo: "Alertas generadas",
-    valor: "24",
-    descripcion: "Alertas ambientales",
+    titulo: "Gestión de alertas (M15)",
+    descripcion: "Alertas generadas de todos los usuarios, con filtros y detalle.",
     icono: "bi-bell",
-    color: "orange",
+    ruta: "/admin/alertas",
+    disponible: true,
   },
   {
-    titulo: "Dispositivos registrados",
-    valor: "18",
-    descripcion: "Dispositivos ESP32",
-    icono: "bi-pc-display",
-    color: "blue",
+    titulo: "Gestión de usuarios (M14)",
+    descripcion: "Listar, cambiar rol y activar o desactivar cuentas (RF-26 a RF-28).",
+    icono: "bi-people",
+    ruta: "/admin/usuarios",
+    disponible: false,
   },
-];
-
-const actividades = [
   {
-    id: 1,
+    titulo: "Estadísticas (M13)",
+    descripcion: "Usuarios, consultas por periodo y ubicaciones más consultadas (RF-25).",
+    icono: "bi-graph-up",
+    ruta: null,
+    disponible: false,
+  },
+  {
+    titulo: "Dispositivos ESP32",
+    descripcion: "Dispositivos registrados y lecturas (RF-20 a RF-24).",
     icono: "bi-cpu",
-    titulo: "Lectura ambiental recibida",
-    descripcion: "Terraza Guatemala · ESP32",
-    fecha: "7 oct 2026 - 08:30",
-  },
-  {
-    id: 2,
-    icono: "bi-cloud-rain",
-    titulo: "Alerta de lluvia generada",
-    descripcion: "Antigua Guatemala · Origen Clima",
-    fecha: "7 oct 2026 - 08:20",
-  },
-  {
-    id: 3,
-    icono: "bi-person",
-    titulo: "Nueva cuenta registrada",
-    descripcion: "Ana López · Rol USUARIO",
-    fecha: "7 oct 2026 - 08:10",
-  },
-  {
-    id: 4,
-    icono: "bi-person-x",
-    titulo: "Cuenta desactivada",
-    descripcion: "Diego Morales · Desactivación lógica",
-    fecha: "6 oct 2026 - 19:10",
+    ruta: null,
+    disponible: false,
   },
 ];
 
-const alertasRecientes = [
-  {
-    id: 1,
-    titulo: "Lluvia",
-    ubicacion: "Antigua Guatemala",
-    fecha: "7 oct 2026 - 08:20",
-    estado: "NUEVA",
-    tipo: "nueva",
-  },
-  {
-    id: 2,
-    titulo: "Temperatura baja",
-    ubicacion: "Quetzaltenango",
-    fecha: "6 oct 2026 - 18:00",
-    estado: "LEÍDA",
-    tipo: "leida",
-  },
-  {
-    id: 3,
-    titulo: "Temperatura alta",
-    ubicacion: "Ciudad de Guatemala",
-    fecha: "6 oct 2026 - 13:30",
-    estado: "NUEVA",
-    tipo: "nueva",
-  },
-];
-
+// M13 – Panel administrativo. Solo muestra datos reales disponibles: las alertas del sistema
+// (GET /api/admin/alertas). Usuarios, estadísticas y dispositivos no tienen endpoints todavía.
 export default function AdminDashboard() {
+  const resumen = useConsulta("admin-panel", async (signal) => {
+    const [todas, nuevas, leidas] = await Promise.all([
+      listarAlertasAdmin({}, signal),
+      listarAlertasAdmin({ estado: "NUEVA" }, signal),
+      listarAlertasAdmin({ estado: "LEIDA" }, signal),
+    ]);
+    return { todas, nuevas: nuevas.totalElementos, leidas: leidas.totalElementos };
+  });
+
+  const datos = resumen.datos;
+  const recientes = (datos?.todas.elementos ?? []).slice(0, 3);
+
+  const estadisticas = [
+    { titulo: "Alertas generadas", valor: datos?.todas.totalElementos, descripcion: "Todas las cuentas", icono: "bi-bell", color: "orange" },
+    { titulo: "Alertas nuevas", valor: datos?.nuevas, descripcion: "Pendientes de leer", icono: "bi-bell-fill", color: "blue" },
+    { titulo: "Alertas leídas", valor: datos?.leidas, descripcion: "Revisadas por su destinatario", icono: "bi-check2-all", color: "cyan" },
+  ];
+
   return (
     <main className="admin-dashboard-page">
       <div className="admin-dashboard-layout">
-        {/* MENÚ LATERAL */}
-        <AdminSidebar />
-
         {/* CONTENIDO PRINCIPAL */}
         <div className="admin-dashboard-container">
           <div className="admin-dashboard-heading">
@@ -107,10 +71,10 @@ export default function AdminDashboard() {
 
             <h1>Panel de administración</h1>
 
-            <p>Resumen general del sistema ClimaPlus.</p>
+            <p>Resumen del sistema ClimaPlus con los datos disponibles en el backend.</p>
           </div>
 
-          {/* ESTADÍSTICAS */}
+          {/* ESTADÍSTICAS REALES */}
           <section className="admin-dashboard-section">
             <div className="admin-dashboard-stats">
               {estadisticas.map((estadistica) => (
@@ -127,7 +91,7 @@ export default function AdminDashboard() {
                   <div className="admin-dashboard-stat-content">
                     <span>{estadistica.titulo}</span>
 
-                    <strong>{estadistica.valor}</strong>
+                    <strong>{estadistica.valor ?? "—"}</strong>
 
                     <small>{estadistica.descripcion}</small>
                   </div>
@@ -136,55 +100,54 @@ export default function AdminDashboard() {
             </div>
           </section>
 
-          {/* AVISO DE DATOS DE EJEMPLO */}
+          {resumen.error !== undefined && (
+            <div className="alert alert-danger" role="alert">
+              {mensajeDeError(resumen.error, "No se pudo cargar el resumen de alertas.")}
+            </div>
+          )}
+
           <div className="admin-dashboard-notice">
             <i className="bi bi-info-circle"></i>
 
             <span>
-              Datos de ejemplo. Este resumen es un mockup de
-              ClimaPlus Fase 1 y no representa estadísticas de
-              una base de datos real.
+              Los conteos de usuarios, consultas y dispositivos llegarán con los módulos
+              pendientes (RF-25 a RF-28 y dispositivos). No se muestran cifras de ejemplo.
             </span>
           </div>
 
-          {/* ACTIVIDAD Y ALERTAS */}
           <div className="admin-dashboard-columns">
-            {/* ACTIVIDAD RECIENTE */}
+            {/* MÓDULOS */}
             <section className="admin-dashboard-panel">
               <div className="admin-dashboard-panel-heading">
-                <h2>Actividad reciente</h2>
-
-                <Link
-                  to="/admin/usuarios"
-                  className="admin-dashboard-panel-link"
-                >
-                  Ver usuarios
-                </Link>
+                <h2>Módulos de administración</h2>
               </div>
 
               <div className="admin-dashboard-activity">
-                {actividades.map((actividad) => (
-                  <article
-                    className="admin-dashboard-activity-item"
-                    key={actividad.id}
-                  >
+                {MODULOS.map((modulo) => (
+                  <article className="admin-dashboard-activity-item" key={modulo.titulo}>
                     <div className="admin-dashboard-activity-icon">
-                      <i className={`bi ${actividad.icono}`}></i>
+                      <i className={`bi ${modulo.icono}`}></i>
                     </div>
 
                     <div className="admin-dashboard-activity-content">
-                      <h3>{actividad.titulo}</h3>
+                      <h3>
+                        {modulo.disponible && modulo.ruta ? (
+                          <Link to={modulo.ruta}>{modulo.titulo}</Link>
+                        ) : (
+                          modulo.titulo
+                        )}
+                      </h3>
 
-                      <p>{actividad.descripcion}</p>
+                      <p>{modulo.descripcion}</p>
 
-                      <small>{actividad.fecha}</small>
+                      <small>{modulo.disponible ? "Disponible" : "Pendiente de implementar"}</small>
                     </div>
                   </article>
                 ))}
               </div>
             </section>
 
-            {/* ALERTAS RECIENTES */}
+            {/* ALERTAS RECIENTES (reales) */}
             <section className="admin-dashboard-panel">
               <div className="admin-dashboard-panel-heading">
                 <h2>Alertas recientes</h2>
@@ -198,24 +161,26 @@ export default function AdminDashboard() {
               </div>
 
               <div className="admin-dashboard-alerts">
-                {alertasRecientes.map((alerta) => (
+                {resumen.cargando && !datos && <p>Cargando alertas...</p>}
+                {datos && recientes.length === 0 && <p>Todavía no hay alertas en el sistema.</p>}
+                {recientes.map((alerta) => (
                   <article
                     className="admin-dashboard-alert-item"
-                    key={alerta.id}
+                    key={alerta.idAlerta}
                   >
                     <div className="admin-dashboard-alert-top">
-                      <h3>{alerta.titulo}</h3>
+                      <h3>{NOMBRES_TIPO_ALERTA[alerta.tipo]}</h3>
 
                       <span
-                        className={`admin-dashboard-alert-badge ${alerta.tipo}`}
+                        className={`admin-dashboard-alert-badge ${alerta.estado === "NUEVA" ? "nueva" : "leida"}`}
                       >
-                        {alerta.estado}
+                        {alerta.estado === "NUEVA" ? "NUEVA" : "LEÍDA"}
                       </span>
                     </div>
 
-                    <strong>{alerta.ubicacion}</strong>
+                    <strong>{alerta.ubicacion.nombre} · {alerta.usuario.nombre}</strong>
 
-                    <small>{alerta.fecha}</small>
+                    <small>{fechaHora(alerta.fechaGeneracion)}</small>
                   </article>
                 ))}
               </div>
@@ -224,7 +189,7 @@ export default function AdminDashboard() {
 
           {/* PIE DE PÁGINA */}
           <footer className="admin-dashboard-footer">
-            Datos de ejemplo · ClimaPlus Fase 1 · 7 oct 2026
+            Datos del backend · ClimaPlus
           </footer>
         </div>
       </div>

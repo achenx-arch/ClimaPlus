@@ -1,66 +1,64 @@
-import { NavLink } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import "./Dashboard.css";
+import { claveSesion, useAuth } from "../context/auth";
+import { useNotificaciones } from "../context/notificaciones";
+import { useConsulta } from "../hooks/useConsulta";
+import { mensajeDeError } from "../services/apiClient";
+import { listarAlertas } from "../services/alertasService";
+import { obtenerClimaActual } from "../services/climaService";
+import { listarFavoritos } from "../services/favoritosService";
+import type { ClimaActual } from "../types/api";
+import {
+  CLASE_TIPO_ALERTA,
+  ICONOS_TIPO_ALERTA,
+  NOMBRES_TIPO_ALERTA,
+  capitalizar,
+  grados,
+  humedad,
+  iconoCondicion,
+  lugar,
+  viento,
+} from "../utils/clima";
+import { fechaHora } from "../utils/fechas";
 
+/** Clases de Dashboard.css para el icono de cada tipo de alerta. */
+const CLASE_ICONO_DASHBOARD = { lluvia: "rain", calor: "heat", frio: "cold" } as const;
+
+// M06 – Dashboard: GET /api/favoritos (con la última consulta de cada uno), GET /api/alertas/contador
+// y GET /api/alertas (las 3 más recientes). Los dispositivos ESP32 llegan en otra fase.
 export default function Dashboard() {
+  const { usuario } = useAuth();
+  const { nuevas, notificarAlertasGeneradas, avisar } = useNotificaciones();
+  const [actualizando, setActualizando] = useState(false);
+  const [climaReciente, setClimaReciente] = useState<Record<number, ClimaActual>>({});
+
+  const favoritos = useConsulta(`favoritos:${usuario?.idUsuario}`, (signal) => listarFavoritos(signal));
+  const alertas = useConsulta(`alertas-recientes:${usuario?.idUsuario}:${nuevas}`, (signal) => listarAlertas({ pagina: 1 }, signal));
+  const listaFavoritos = favoritos.datos ?? [];
+  const recientes = (alertas.datos?.elementos ?? []).slice(0, 3);
+
+  const actualizarClima = async () => {
+    setActualizando(true);
+    let fallidas = 0;
+    for (const favorito of listaFavoritos) {
+      try {
+        const clima = await obtenerClimaActual(favorito.ubicacion.idUbicacion, claveSesion(usuario));
+        setClimaReciente((actual) => ({ ...actual, [favorito.ubicacion.idUbicacion]: clima }));
+        notificarAlertasGeneradas(clima.alertasGeneradas);
+      } catch {
+        fallidas++;
+      }
+    }
+    setActualizando(false);
+    favoritos.recargar();
+    if (fallidas > 0) avisar(`No se pudo actualizar el clima de ${fallidas} ubicación(es).`, "error");
+  };
+
   return (
     <main className="dashboard-page">
       <div className="dashboard-layout">
 
-        {/* MENÚ LATERAL */}
-        <aside className="dashboard-sidebar">
-          <span className="dashboard-sidebar-title">
-            MI ESPACIO
-          </span>
-
-          <nav className="dashboard-sidebar-nav">
-            <NavLink to="/dashboard" end>
-              <i className="bi bi-grid"></i>
-              Dashboard
-            </NavLink>
-
-            <NavLink to="/clima">
-              <i className="bi bi-cloud-sun"></i>
-              Clima
-            </NavLink>
-
-            <NavLink to="/pronostico">
-              <i className="bi bi-calendar3"></i>
-              Pronóstico
-            </NavLink>
-
-            <NavLink to="/favoritos">
-              <i className="bi bi-star"></i>
-              Favoritos
-            </NavLink>
-
-            <NavLink to="/historial">
-              <i className="bi bi-clock-history"></i>
-              Historial
-            </NavLink>
-
-            <NavLink to="/alertas">
-              <i className="bi bi-bell"></i>
-              Alertas
-            </NavLink>
-
-            <NavLink to="/dispositivos">
-              <i className="bi bi-display"></i>
-              Mis dispositivos
-            </NavLink>
-          </nav>
-
-          <div className="dashboard-sidebar-bottom">
-            <NavLink to="/perfil">
-              <i className="bi bi-person"></i>
-              Perfil
-            </NavLink>
-
-            <button type="button" disabled title="Disponible al conectar el inicio de sesión">
-              <i className="bi bi-box-arrow-right"></i>
-              Cerrar sesión
-            </button>
-          </div>
-        </aside>
 
         {/* CONTENIDO PRINCIPAL */}
         <div className="dashboard-container">
@@ -68,7 +66,7 @@ export default function Dashboard() {
             DASHBOARD
           </span>
 
-          <h1>Hola, Usuario</h1>
+          <h1>Hola, {usuario?.nombre ?? "Usuario"}</h1>
 
           <p className="dashboard-description">
             Tus ubicaciones, últimas consultas y alertas en un solo lugar.
@@ -84,7 +82,7 @@ export default function Dashboard() {
 
               <div>
                 <span>Favoritos</span>
-                <strong>3</strong>
+                <strong>{favoritos.datos ? listaFavoritos.length : "—"}</strong>
                 <small>Ubicaciones guardadas</small>
               </div>
             </article>
@@ -96,7 +94,7 @@ export default function Dashboard() {
 
               <div>
                 <span>Alertas nuevas</span>
-                <strong>2</strong>
+                <strong>{nuevas}</strong>
                 <small>Pendientes de leer</small>
               </div>
             </article>
@@ -108,8 +106,8 @@ export default function Dashboard() {
 
               <div>
                 <span>Dispositivos activos</span>
-                <strong>2</strong>
-                <small>Vinculados a tu cuenta</small>
+                <strong>—</strong>
+                <small>Disponible en la fase de dispositivos ESP32</small>
               </div>
             </article>
 
@@ -119,121 +117,87 @@ export default function Dashboard() {
   <div className="dashboard-section-header">
     <h2>Mis ubicaciones favoritas</h2>
 
-    <button type="button" className="dashboard-refresh" disabled>
+    <button
+      type="button"
+      className="dashboard-refresh"
+      onClick={actualizarClima}
+      disabled={actualizando || listaFavoritos.length === 0}
+    >
       <i className="bi bi-arrow-clockwise"></i>
-      Actualizar clima
+      {actualizando ? "Actualizando..." : "Actualizar clima"}
     </button>
   </div>
 
 <div className="dashboard-info">
   <i className="bi bi-info-circle"></i>
   <span>
-    Se muestran datos de demostración. La actualización estará
-    disponible al conectar el servicio meteorológico.
+    Para cada favorito se muestra su última consulta registrada.
+    "Actualizar clima" consulta las condiciones actuales.
   </span>
 </div>
+
+  {favoritos.error !== undefined && (
+    <div className="alert alert-danger" role="alert">
+      {mensajeDeError(favoritos.error, "No se pudieron cargar tus favoritos.")}
+    </div>
+  )}
+
+  {favoritos.datos !== undefined && listaFavoritos.length === 0 && (
+    <p className="text-secondary">
+      Aún no tienes ubicaciones favoritas. <Link to="/favoritos">Agregar favoritos</Link>
+    </p>
+  )}
+
   {/* TARJETAS DE UBICACIONES FAVORITAS */}
 <div className="dashboard-weather-grid">
+  {listaFavoritos.map((favorito) => {
+    const reciente = climaReciente[favorito.ubicacion.idUbicacion];
+    const ultima = favorito.ultimaConsulta;
+    const descripcion = reciente?.descripcion ?? ultima?.descripcion ?? null;
+    const fechaConsulta = reciente?.consulta.fechaConsultaUtc ?? ultima?.fechaConsulta ?? null;
 
-  {/* CIUDAD DE GUATEMALA */}
-  <article className="dashboard-weather-card">
+    return (
+  <article className="dashboard-weather-card" key={favorito.idFavorito}>
     <div className="dashboard-weather-header">
       <div>
-        <h3>Ciudad de Guatemala</h3>
-        <span>Guatemala, GT</span>
+        <h3>{favorito.ubicacion.nombre}</h3>
+        <span>{lugar(favorito.ubicacion)}</span>
       </div>
       <i className="bi bi-star-fill"></i>
     </div>
 
     <div className="dashboard-weather-main">
       <div>
-        <strong>22°</strong>
-        <p>Parcialmente nublado</p>
+        <strong>{grados(reciente?.temperatura ?? ultima?.temperatura)}</strong>
+        <p>{descripcion ? capitalizar(descripcion) : "Sin consultas todavía"}</p>
       </div>
-      <i className="bi bi-cloud-sun"></i>
+      <i className={`bi ${iconoCondicion(reciente?.codigoCondicion ?? ultima?.codigoCondicion, reciente?.detalle.esDeDia ?? true)}`}></i>
     </div>
 
+    {reciente && (
     <div className="dashboard-weather-details">
       <span>
-        <i className="bi bi-droplet-half"></i> 74% humedad
+        <i className="bi bi-droplet-half"></i> {humedad(reciente.humedad)} humedad
       </span>
       <span>
-        <i className="bi bi-wind"></i> 12 km/h
+        <i className="bi bi-wind"></i> {viento(reciente.velocidadViento)}
       </span>
     </div>
+    )}
 
     <div className="dashboard-weather-updated">
       <i className="bi bi-clock"></i>
-      <span>Última consulta almacenada: 7 oct. 2026 - 08:30 a. m.</span>
+      <span>
+        {fechaConsulta ? `Última consulta almacenada: ${fechaHora(fechaConsulta)}` : "Aún no hay consultas"}
+      </span>
     </div>
+
+    <Link className="small" to={`/clima?idUbicacion=${favorito.ubicacion.idUbicacion}`}>
+      Ver clima ahora
+    </Link>
   </article>
-
-  {/* ANTIGUA GUATEMALA */}
-  <article className="dashboard-weather-card">
-    <div className="dashboard-weather-header">
-      <div>
-        <h3>Antigua Guatemala</h3>
-        <span>Sacatepéquez, GT</span>
-      </div>
-      <i className="bi bi-star"></i>
-    </div>
-
-    <div className="dashboard-weather-main">
-      <div>
-        <strong>20°</strong>
-        <p>Lluvia ligera</p>
-      </div>
-      <i className="bi bi-cloud-drizzle"></i>
-    </div>
-
-    <div className="dashboard-weather-details">
-      <span>
-        <i className="bi bi-droplet-half"></i> 81% humedad
-      </span>
-      <span>
-        <i className="bi bi-wind"></i> 8 km/h
-      </span>
-    </div>
-
-    <div className="dashboard-weather-updated">
-      <i className="bi bi-clock"></i>
-      <span>Última consulta almacenada: 6 oct. 2026 - 05:15 p. m.</span>
-    </div>
-  </article>
-
-  {/* QUETZALTENANGO */}
-  <article className="dashboard-weather-card">
-    <div className="dashboard-weather-header">
-      <div>
-        <h3>Quetzaltenango</h3>
-        <span>Quetzaltenango, GT</span>
-      </div>
-      <i className="bi bi-star"></i>
-    </div>
-
-    <div className="dashboard-weather-main">
-      <div>
-        <strong>16°</strong>
-        <p>Nublado</p>
-      </div>
-      <i className="bi bi-cloud"></i>
-    </div>
-
-    <div className="dashboard-weather-details">
-      <span>
-        <i className="bi bi-droplet-half"></i> 78% humedad
-      </span>
-      <span>
-        <i className="bi bi-wind"></i> 10 km/h
-      </span>
-    </div>
-
-    <div className="dashboard-weather-updated">
-      <i className="bi bi-clock"></i>
-      <span>Última consulta almacenada: 6 oct. 2026 - 06:40 a. m.</span>
-    </div>
-  </article>
-
+    );
+  })}
 </div>
 </section>
 {/* ========================================
@@ -244,74 +208,38 @@ export default function Dashboard() {
 
   <div className="dashboard-alerts-header">
     <h2>Alertas recientes</h2>
-    <a href="/alertas">
+    <Link to="/alertas">
       Ver todas las alertas
       <i className="bi bi-chevron-right"></i>
-    </a>
+    </Link>
   </div>
 
+  {alertas.datos !== undefined && recientes.length === 0 && (
+    <p className="text-secondary">
+      Sin alertas por ahora. <Link to="/configuracion-alertas">Configurar alertas</Link>
+    </p>
+  )}
+
   <div className="dashboard-alerts-grid">
-
-    {/* ALERTA 1 */}
-    <article className="dashboard-alert-card">
+    {recientes.map((alerta) => (
+    <article className="dashboard-alert-card" key={alerta.idAlerta}>
       <div className="dashboard-alert-top">
-        <div className="dashboard-alert-icon rain">
-          <i className="bi bi-cloud-rain"></i>
+        <div className={`dashboard-alert-icon ${CLASE_ICONO_DASHBOARD[CLASE_TIPO_ALERTA[alerta.tipo]]}`}>
+          <i className={`bi ${ICONOS_TIPO_ALERTA[alerta.tipo]}`}></i>
         </div>
-        <span className="dashboard-alert-badge new">Nueva</span>
+        <span className={`dashboard-alert-badge ${alerta.estado === "NUEVA" ? "new" : "read"}`}>
+          {alerta.estado === "NUEVA" ? "Nueva" : "Leída"}
+        </span>
       </div>
 
-      <h3>Lluvia intensa</h3>
-      <strong>Antigua Guatemala</strong>
+      <h3>{NOMBRES_TIPO_ALERTA[alerta.tipo]}</h3>
+      <strong>{alerta.ubicacion.nombre}</strong>
 
-      <p>
-        Posibles acumulaciones de agua. Evita zonas propensas
-        a inundaciones.
-      </p>
+      <p>{alerta.mensaje}</p>
 
-      <small>7 oct. 2026 - 08:20 a. m.</small>
+      <small>{fechaHora(alerta.fechaGeneracion)}</small>
     </article>
-
-    {/* ALERTA 2 */}
-    <article className="dashboard-alert-card">
-      <div className="dashboard-alert-top">
-        <div className="dashboard-alert-icon heat">
-          <i className="bi bi-sun"></i>
-        </div>
-        <span className="dashboard-alert-badge new">Nueva</span>
-      </div>
-
-      <h3>Temperatura alta</h3>
-      <strong>Ciudad de Guatemala</strong>
-
-      <p>
-        Temperatura superior al umbral configurado.
-        Valor detectado: 34 °C - Umbral: 32 °C.
-      </p>
-
-      <small>7 oct. 2026 - 08:00 a. m.</small>
-    </article>
-
-    {/* ALERTA 3 */}
-    <article className="dashboard-alert-card">
-      <div className="dashboard-alert-top">
-        <div className="dashboard-alert-icon cold">
-          <i className="bi bi-thermometer-low"></i>
-        </div>
-        <span className="dashboard-alert-badge read">Leída</span>
-      </div>
-
-      <h3>Descenso de temperatura</h3>
-      <strong>Quetzaltenango</strong>
-
-      <p>
-        Se esperan temperaturas bajas durante la noche.
-        Lleva abrigo.
-      </p>
-
-      <small>6 oct. 2026 - 06:00 p. m.</small>
-    </article>
-
+    ))}
   </div>
 </section>
         </div>

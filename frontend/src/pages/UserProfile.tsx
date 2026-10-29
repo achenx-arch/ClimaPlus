@@ -1,67 +1,37 @@
 import { useState, type FormEvent } from "react";
-import UserSidebar from "../components/UserSidebar";
 import "./UserProfile.css";
-import AdminSidebar from "../components/AdminSidebar";
 import { useLocation } from "react-router-dom";
+import { useAuth } from "../context/auth";
+import { useNotificaciones } from "../context/notificaciones";
+import { useConsulta } from "../hooks/useConsulta";
+import { ApiError, mensajeDeError } from "../services/apiClient";
+import { actualizarPerfil, cambiarPassword, obtenerPerfil } from "../services/authService";
+import type { Usuario } from "../types/api";
+import { fecha } from "../utils/fechas";
+import EnlaceVolver from "../components/EnlaceVolver";
 
-interface PerfilUsuario {
-  nombre: string;
-  correo: string;
-  rol: string;
-  estado: string;
-  fechaRegistro: string;
-}
+const POLITICA_PASSWORD = /^(?=.*\p{L})(?=.*\d).{8,128}$/u;
 
-// Datos temporales hasta conectar el backend.
-const perfilInicial: PerfilUsuario = {
-  nombre: "Amilcar Chen",
-  correo: "chx.amilcar@example.com",
-  rol: "Usuario",
-  estado: "Activa",
-  fechaRegistro: "1 oct. 2026",
-};
-
+// M16 / M17 – Perfil: GET y PUT /api/usuarios/me, PUT /api/usuarios/me/password
+// (contrato-auth-perfil.md). Rol y estado son de solo lectura.
 export default function UserProfile() {
   const location = useLocation();
   const esAdministrador = location.pathname.startsWith("/admin");
-const perfilAdministrador: PerfilUsuario = {
-  nombre: "Amilcar Chen",
-  correo: "chen.amilcar@example.com",
-  rol: "Administrador",
-  estado: "Activa",
-  fechaRegistro: "15 sep. 2026",
-};
+  const { usuario, actualizarUsuario } = useAuth();
+  const { avisar } = useNotificaciones();
 
-const datosIniciales = esAdministrador
-  ? perfilAdministrador
-  : perfilInicial;
+  const consultaPerfil = useConsulta(`perfil:${usuario?.idUsuario}`, (signal) => obtenerPerfil(signal));
+  const perfilServidor: Usuario | null = consultaPerfil.datos ?? usuario;
 
-const clavePerfil = esAdministrador
-  ? "climaplus_perfil_admin"
-  : "climaplus_perfil_usuario";
+  // null = el campo muestra el valor del servidor; texto = lo que el usuario está editando.
+  const [nombreEditado, setNombreEditado] = useState<string | null>(null);
+  const [correoEditado, setCorreoEditado] = useState<string | null>(null);
+  const nombre = nombreEditado ?? perfilServidor?.nombre ?? "";
+  const correo = correoEditado ?? perfilServidor?.correo ?? "";
 
-const [perfil, setPerfil] = useState<PerfilUsuario>(() => {
-  try {
-    const guardado = localStorage.getItem(clavePerfil);
-
-    if (guardado) {
-      const datos = JSON.parse(guardado) as Partial<PerfilUsuario>;
-
-      return {
-        ...datosIniciales,
-        nombre: datos.nombre || datosIniciales.nombre,
-        correo: datos.correo || datosIniciales.correo,
-      };
-    }
-  } catch (error) {
-    console.error("Error al recuperar el perfil:", error);
-  }
-
-  return datosIniciales;
-});
-const [nombre, setNombre] = useState(perfil.nombre);
-const [correo, setCorreo] = useState(perfil.correo);
   const [mensaje, setMensaje] = useState("");
+  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
   const [mostrarCambioPassword, setMostrarCambioPassword] = useState(false);
 
   const [passwordActual, setPasswordActual] = useState("");
@@ -69,6 +39,15 @@ const [correo, setCorreo] = useState(perfil.correo);
   const [confirmarPassword, setConfirmarPassword] = useState("");
 
   const [mensajePassword, setMensajePassword] = useState("");
+  const [cambiandoPassword, setCambiandoPassword] = useState(false);
+
+  const perfil = {
+    nombre: perfilServidor?.nombre ?? "",
+    correo: perfilServidor?.correo ?? "",
+    rol: perfilServidor?.rol === "ADMINISTRADOR" ? "Administrador" : "Usuario",
+    estado: perfilServidor ? (perfilServidor.activo ? "Activa" : "Inactiva") : "—",
+    fechaRegistro: perfilServidor ? fecha(perfilServidor.fechaCreacion) : "—",
+  };
 
   const iniciales = perfil.nombre
     .trim()
@@ -77,9 +56,13 @@ const [correo, setCorreo] = useState(perfil.correo);
     .map((palabra) => palabra.charAt(0).toUpperCase())
     .join("");
 
-  const guardarPerfil = (e: FormEvent<HTMLFormElement>) => {
+  const primerError = (error: ApiError) =>
+    Object.fromEntries(Object.entries(error.errores).map(([campo, mensajes]) => [campo, mensajes[0]]));
+
+  const guardarPerfil = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMensaje("");
+    setErrores({});
 
     const nombreLimpio = nombre.trim();
     const correoLimpio = correo.trim();
@@ -89,34 +72,31 @@ const [correo, setCorreo] = useState(perfil.correo);
       return;
     }
 
-const perfilActualizado: PerfilUsuario = {
-  ...perfil,
-  nombre: nombreLimpio,
-  correo: correoLimpio,
-};
-
-try {
-  localStorage.setItem(
-    clavePerfil,
-    JSON.stringify({
-      nombre: nombreLimpio,
-      correo: correoLimpio,
-    })
-  );
-
-  setPerfil(perfilActualizado);
-} catch (error) {
-  console.error("Error al guardar el perfil:", error);
-  setMensaje("No se pudieron guardar los cambios.");
-  return;
-}
-
-    setNombre(nombreLimpio);
-    setCorreo(correoLimpio);
-    setMensaje("Cambios guardados correctamente en esta demostración.");
+    setGuardando(true);
+    try {
+      const actualizado = await actualizarPerfil({ nombre: nombreLimpio, correo: correoLimpio });
+      actualizarUsuario(actualizado);
+      consultaPerfil.actualizar(() => actualizado);
+      setNombreEditado(null);
+      setCorreoEditado(null);
+      avisar("Cambios guardados");
+    } catch (error) {
+      if (error instanceof ApiError) setErrores(primerError(error));
+      setMensaje(mensajeDeError(error, "No se pudieron guardar los cambios."));
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const solicitarCambioPassword = (e: FormEvent<HTMLFormElement>) => {
+  const cerrarModalPassword = () => {
+    setMostrarCambioPassword(false);
+    setPasswordActual("");
+    setPasswordNueva("");
+    setConfirmarPassword("");
+    setMensajePassword("");
+  };
+
+  const solicitarCambioPassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMensajePassword("");
 
@@ -125,9 +105,9 @@ try {
       return;
     }
 
-    if (passwordNueva.length < 8) {
+    if (!POLITICA_PASSWORD.test(passwordNueva)) {
       setMensajePassword(
-        "La contraseña nueva debe tener al menos 8 caracteres."
+        "La contraseña debe tener entre 8 y 128 caracteres e incluir al menos una letra y un número."
       );
       return;
     }
@@ -137,23 +117,32 @@ try {
       return;
     }
 
-    // La contraseña se actualizará mediante el backend.
-    // No guardamos contraseñas en el navegador.
-    setMensajePassword(
-      "Formulario validado. El cambio real estará disponible al conectar el backend."
-    );
-
-    setPasswordActual("");
-    setPasswordNueva("");
-    setConfirmarPassword("");
+    setCambiandoPassword(true);
+    try {
+      // No se guarda ninguna contraseña en el navegador.
+      await cambiarPassword({ passwordActual, passwordNueva });
+      cerrarModalPassword();
+      avisar("Contraseña actualizada");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setMensajePassword(error.errorDe("passwordActual") ?? error.errorDe("passwordNueva") ?? error.message);
+      } else {
+        setMensajePassword(mensajeDeError(error, "No se pudo cambiar la contraseña."));
+      }
+    } finally {
+      setCambiandoPassword(false);
+    }
   };
 
   return (
     <div className="user-profile-layout">
-      {esAdministrador ? <AdminSidebar /> : <UserSidebar />}
 
       <main className="user-profile-page">
         <div className="user-profile-container">
+          <EnlaceVolver to={esAdministrador ? "/admin" : "/dashboard"}>
+            {esAdministrador ? "Volver al panel administrativo" : "Volver a mi dashboard"}
+          </EnlaceVolver>
+
           <header className="user-profile-heading">
             <span>PERFIL</span>
             <h1>Mi perfil</h1>
@@ -192,12 +181,13 @@ try {
                       type="text"
                       value={nombre}
                       onChange={(e) => {
-                        setNombre(e.target.value);
+                        setNombreEditado(e.target.value);
                         setMensaje("");
                       }}
                       maxLength={100}
                       required
                     />
+                    {errores.nombre && <small className="text-danger d-block">{errores.nombre}</small>}
                   </label>
 
                   <label>
@@ -206,12 +196,13 @@ try {
                       type="email"
                       value={correo}
                       onChange={(e) => {
-                        setCorreo(e.target.value);
+                        setCorreoEditado(e.target.value);
                         setMensaje("");
                       }}
                       maxLength={150}
                       required
                     />
+                    {errores.correo && <small className="text-danger d-block">{errores.correo}</small>}
                   </label>
                 </div>
 
@@ -224,8 +215,8 @@ try {
                 </div>
 
                 <div className="user-profile-form-footer">
-                  <button type="submit">
-                    Guardar cambios
+                  <button type="submit" disabled={guardando}>
+                    {guardando ? "Guardando..." : "Guardar cambios"}
                   </button>
                 </div>
 
@@ -252,8 +243,6 @@ try {
                 </div>
 
                 <div className="user-profile-account-note">
-                  Datos de ejemplo para la demostración.
-                  <br />
                   El rol y el estado son de solo lectura.
                 </div>
               </div>
@@ -295,7 +284,7 @@ try {
           className="user-profile-modal-overlay"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
-              setMostrarCambioPassword(false);
+              cerrarModalPassword();
             }
           }}
         >
@@ -312,7 +301,7 @@ try {
 
               <button
                 type="button"
-                onClick={() => setMostrarCambioPassword(false)}
+                onClick={cerrarModalPassword}
                 aria-label="Cerrar ventana"
               >
                 <i className="bi bi-x-lg"></i>
@@ -368,14 +357,14 @@ try {
               )}
 
               <div className="user-profile-modal-actions">
-                <button type="submit">
-                  Validar cambio
+                <button type="submit" disabled={cambiandoPassword}>
+                  {cambiandoPassword ? "Guardando..." : "Cambiar contraseña"}
                 </button>
 
                 <button
                   type="button"
                   className="secondary"
-                  onClick={() => setMostrarCambioPassword(false)}
+                  onClick={cerrarModalPassword}
                 >
                   Cancelar
                 </button>
@@ -386,4 +375,4 @@ try {
       )}
     </div>
   );
-}
+}

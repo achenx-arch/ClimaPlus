@@ -1,0 +1,167 @@
+/* ==========================================
+   CLIMAPLUS - LAYOUTS CON MENÚ LATERAL
+   Usuario (M04–M12, M16) y administración (M13–M15, M17)
+   ========================================== */
+
+.cp-layout {
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 80px);
+  background: #f3f8fc;
+}
+
+.cp-layout-admin {
+  min-height: 100vh;
+}
+
+.cp-layout-menu {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.cp-layout-menu > aside {
+  min-height: calc(100vh - 80px);
+}
+
+.cp-layout-admin .cp-layout-menu > aside {
+  min-height: 100vh;
+}
+
+.cp-layout-contenido {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cp-layout-contenido > :not(.cp-barra-movil) {
+  flex: 1;
+}
+
+.cp-layout-contenido > .cp-barra-movil {
+  flex: 0 0 auto;
+}
+
+/* Barra con el botón del menú (solo en móviles y tabletas) */
+
+.cp-barra-movil {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e3eaf2;
+}
+
+.cp-barra-movil button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid #d5e3ef;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #075d87;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* Menú móvil (offcanvas de Bootstrap controlado por React) */
+
+.cp-menu-movil.offcanvas {
+  visibility: visible;
+  transform: none;
+  max-width: 85vw;
+}
+
+.cp-menu-movil .offcanvas-body {
+  padding: 0;
+}
+
+.cp-menu-movil .user-sidebar,
+.cp-menu-movil .admin-sidebar {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  border: none;
+  padding: 12px 14px 20px;
+}
+
+.cp-menu-movil .user-sidebar-nav,
+.cp-menu-movil .admin-sidebar-nav,
+.cp-menu-movil .user-sidebar-bottom,
+.cp-menu-movil .admin-sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Enlace "Volver" */
+
+.cp-volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  color: #075d87;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cp-volver:hover {
+  text-decoration: underline;
+}
+
+/* Pantallas de aviso (acceso denegado, no encontrada, módulo pendiente) */
+
+.cp-aviso {
+  max-width: 560px;
+  margin: 48px auto;
+  padding: 36px 30px;
+  background: #ffffff;
+  border: 1px solid #e3eaf2;
+  border-radius: 18px;
+  text-align: center;
+  color: #123455;
+  box-shadow: 0 10px 30px rgba(18, 52, 85, 0.06);
+}
+
+.cp-aviso-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  border-radius: 18px;
+  background: #e1f2ff;
+  color: #075d87;
+  font-size: 30px;
+}
+
+.cp-aviso h1 {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.cp-aviso p {
+  color: #58718b;
+}
+
+.cp-aviso-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+@media (max-width: 991.98px) {
+  .cp-layout-menu {
+    display: none;
+  }
+
+  .cp-barra-movil {
+    display: flex;
+  }
+}

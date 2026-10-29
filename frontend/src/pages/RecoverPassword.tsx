@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import "./Login.css";
+import EnlaceVolver from "../components/EnlaceVolver";
 
 export default function RecoverPassword() {
   const [email, setEmail] = useState("");
@@ -59,6 +60,8 @@ export default function RecoverPassword() {
 
       <section className="login-right">
         <div className="login-form-container">
+          <EnlaceVolver to="/">Volver al Inicio</EnlaceVolver>
+
           <h2>Recuperar contraseña</h2>
 
           <p className="login-subtitle">
@@ -114,4 +117,4 @@ export default function RecoverPassword() {
       </section>
     </main>
   );
-}
+}

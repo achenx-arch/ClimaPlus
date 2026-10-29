@@ -1,218 +1,83 @@
 import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import "./History.css";
+import { useAuth } from "../context/auth";
+import { useConsulta } from "../hooks/useConsulta";
+import { ApiError, mensajeDeError } from "../services/apiClient";
+import { listarFavoritos } from "../services/favoritosService";
+import { listarHistorial, obtenerConsultaHistorial } from "../services/historialService";
+import type { ConsultaHistorial, TipoConsulta, Ubicacion } from "../types/api";
+import { capitalizar, grados, humedad, lugar, numero, viento } from "../utils/clima";
+import { diaCorto, fecha, hora, nombreDia, rangoDelDia } from "../utils/fechas";
+import EnlaceVolver from "../components/EnlaceVolver";
 
-type Consulta = {
-  id: number;
-  ciudad: string;
-  ubicacion: string;
-  temperatura: number;
-  condicion: string;
-  fecha: string;
-  hora: string;
-  icono: string;
-  tipo?: "ACTUAL" | "PRONÓSTICO";
-};
+type FiltroTipo = "TODOS" | TipoConsulta;
 
+const ETIQUETA_TIPO: Record<TipoConsulta, string> = { ACTUAL: "ACTUAL", PRONOSTICO: "PRONÓSTICO" };
+
+// M08 – Historial: GET /api/historial (20 por página, más reciente primero) y
+// GET /api/historial/{id}. Solo consultas propias con sesión; el historial es de solo lectura.
 export default function History() {
   const navigate = useNavigate();
+  const { usuario } = useAuth();
 
-  const [busqueda, setBusqueda] = useState("");
-  const [tipoFiltro, setTipoFiltro] = useState("TODOS");
+  const [ubicacionFiltro, setUbicacionFiltro] = useState("");
+  const [tipoFiltro, setTipoFiltro] = useState<FiltroTipo>("TODOS");
   const [fechaFiltro, setFechaFiltro] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [idDetalle, setIdDetalle] = useState<number | null>(null);
 
-  const [consultas, setConsultas] = useState<Consulta[]>(() => {
-    try {
-      const guardadas = localStorage.getItem("climaplus_historial");
-
-      if (guardadas !== null) {
-        const datos = JSON.parse(guardadas);
-        return Array.isArray(datos) ? datos : [];
-      }
-
-      // Consultas de demostración para visualizar el diseño de Figma.
-      return [
-        {
-          id: 1,
-          ciudad: "Ciudad de Guatemala",
-          ubicacion: "Guatemala, GT",
-          temperatura: 22,
-          condicion: "Parcialmente nublado",
-          fecha: "7 oct. 2026",
-          hora: "08:35",
-          icono: "bi-cloud-sun",
-          tipo: "PRONÓSTICO",
-        },
-        {
-          id: 2,
-          ciudad: "Ciudad de Guatemala",
-          ubicacion: "Guatemala, GT",
-          temperatura: 22,
-          condicion: "Parcialmente nublado",
-          fecha: "7 oct. 2026",
-          hora: "08:30",
-          icono: "bi-cloud-sun",
-          tipo: "ACTUAL",
-        },
-        {
-          id: 3,
-          ciudad: "Antigua Guatemala",
-          ubicacion: "Sacatepéquez, GT",
-          temperatura: 20,
-          condicion: "Lluvia ligera",
-          fecha: "6 oct. 2026",
-          hora: "17:20",
-          icono: "bi-cloud-drizzle",
-          tipo: "PRONÓSTICO",
-        },
-        {
-          id: 4,
-          ciudad: "Antigua Guatemala",
-          ubicacion: "Sacatepéquez, GT",
-          temperatura: 20,
-          condicion: "Lluvia ligera",
-          fecha: "6 oct. 2026",
-          hora: "17:15",
-          icono: "bi-cloud-drizzle",
-          tipo: "ACTUAL",
-        },
-        {
-          id: 5,
-          ciudad: "Quetzaltenango",
-          ubicacion: "Quetzaltenango, GT",
-          temperatura: 16,
-          condicion: "Nublado",
-          fecha: "6 oct. 2026",
-          hora: "16:40",
-          icono: "bi-cloud",
-          tipo: "ACTUAL",
-        },
-      ];
-    } catch {
-      return [];
-    }
-  });
-
-  const limpiarHistorial = () => {
-    if (
-      !window.confirm(
-        "¿Estás seguro de que deseas eliminar todo tu historial de consultas?"
-      )
-    ) {
-      return;
-    }
-
-    localStorage.setItem("climaplus_historial", JSON.stringify([]));
-    setConsultas([]);
+  const rango = fechaFiltro ? rangoDelDia(fechaFiltro) : null;
+  const filtro = {
+    tipo: tipoFiltro === "TODOS" ? undefined : tipoFiltro,
+    idUbicacion: ubicacionFiltro ? Number(ubicacionFiltro) : undefined,
+    desde: rango?.desde,
+    hasta: rango?.hasta,
+    pagina,
   };
 
-  const eliminarConsulta = (id: number) => {
-    if (!window.confirm("¿Deseas eliminar esta consulta del historial?")) {
-      return;
-    }
+  const historial = useConsulta(`historial:${usuario?.idUsuario}:${JSON.stringify(filtro)}`, (signal) =>
+    listarHistorial(filtro, signal)
+  );
+  const favoritos = useConsulta(`favoritos:${usuario?.idUsuario}`, (signal) => listarFavoritos(signal));
+  const detalle = useConsulta(idDetalle === null ? null : `historial-detalle:${idDetalle}`, (signal) =>
+    obtenerConsultaHistorial(idDetalle!, signal)
+  );
 
-    const actualizadas = consultas.filter(
-      (consulta) => consulta.id !== id
-    );
+  const consultas: ConsultaHistorial[] = historial.datos?.elementos ?? [];
+  const totalElementos = historial.datos?.totalElementos ?? 0;
+  const totalPaginas = historial.datos?.totalPaginas ?? 0;
 
-    setConsultas(actualizadas);
+  // Opciones del filtro de ubicación: favoritos y ubicaciones de la página actual.
+  const opcionesUbicacion = new Map<number, Ubicacion>();
+  for (const favorito of favoritos.datos ?? []) opcionesUbicacion.set(favorito.ubicacion.idUbicacion, favorito.ubicacion);
+  for (const consulta of consultas) opcionesUbicacion.set(consulta.ubicacion.idUbicacion, consulta.ubicacion);
 
-    localStorage.setItem(
-      "climaplus_historial",
-      JSON.stringify(actualizadas)
-    );
+  const cambiarFiltro = (aplicar: () => void) => {
+    aplicar();
+    setPagina(1);
   };
 
-  const consultasFiltradas = consultas.filter((consulta) => {
-    const coincideBusqueda =
-      `${consulta.ciudad} ${consulta.ubicacion}`
-        .toLocaleLowerCase("es")
-        .includes(busqueda.trim().toLocaleLowerCase("es"));
+  const consultarDeNuevo = (tipo: TipoConsulta, idUbicacion: number) =>
+    navigate(tipo === "PRONOSTICO" ? `/pronostico?idUbicacion=${idUbicacion}` : `/clima?idUbicacion=${idUbicacion}`);
 
-    const coincideTipo =
-      tipoFiltro === "TODOS" ||
-      (consulta.tipo ?? "ACTUAL") === tipoFiltro;
-
-    const coincideFecha =
-      !fechaFiltro ||
-      consulta.fecha ===
-        new Date(`${fechaFiltro}T12:00:00`).toLocaleDateString(
-          "es-GT",
-          {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          }
-        );
-
-    return coincideBusqueda && coincideTipo && coincideFecha;
-  });
+  const errorDetalle =
+    detalle.error instanceof ApiError && detalle.error.status === 404
+      ? "La consulta no existe."
+      : detalle.error
+        ? mensajeDeError(detalle.error, "No se pudo cargar el detalle.")
+        : "";
 
   return (
     <main className="history-page">
       <div className="history-layout">
 
-        {/* MENÚ LATERAL */}
-        <aside className="history-sidebar">
-          <span className="history-sidebar-title">MI ESPACIO</span>
-
-          <nav className="history-sidebar-nav">
-            <NavLink to="/dashboard">
-              <i className="bi bi-grid"></i>
-              Dashboard
-            </NavLink>
-
-            <NavLink to="/clima">
-              <i className="bi bi-cloud-sun"></i>
-              Clima
-            </NavLink>
-
-            <NavLink to="/pronostico">
-              <i className="bi bi-calendar3"></i>
-              Pronóstico
-            </NavLink>
-
-            <NavLink to="/favoritos">
-              <i className="bi bi-star"></i>
-              Favoritos
-            </NavLink>
-
-            <NavLink to="/historial" className="active">
-              <i className="bi bi-clock-history"></i>
-              Historial
-            </NavLink>
-
-            <NavLink to="/alertas">
-              <i className="bi bi-bell"></i>
-              Alertas
-            </NavLink>
-
-            <NavLink to="/dispositivos">
-              <i className="bi bi-display"></i>
-              Mis dispositivos
-            </NavLink>
-          </nav>
-
-          <div className="history-sidebar-bottom">
-            <NavLink to="/perfil">
-              <i className="bi bi-person"></i>
-              Perfil
-            </NavLink>
-
-            <button
-              type="button"
-              disabled
-              title="Disponible al conectar el inicio de sesión"
-            >
-              <i className="bi bi-box-arrow-right"></i>
-              Cerrar sesión
-            </button>
-          </div>
-        </aside>
 
         {/* CONTENIDO */}
         <div className="history-container">
-          <span className="history-label">HISTORIAL</span>
+          <EnlaceVolver to="/dashboard">Volver a mi dashboard</EnlaceVolver>
+
+          <span className="history-label d-block">HISTORIAL</span>
 
           <header className="history-header">
             <h1>Historial de consultas</h1>
@@ -226,19 +91,25 @@ export default function History() {
           <section className="history-filters">
             <div className="history-filter-field">
               <label htmlFor="history-search">
-                Buscar ubicación
+                Ubicación
               </label>
 
               <div className="history-search-box">
-                <i className="bi bi-search"></i>
-                <input
+                <i className="bi bi-geo-alt"></i>
+                <select
                   id="history-search"
-                  type="search"
-                  placeholder="Ciudad o municipio"
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  maxLength={100}
-                />
+                  value={ubicacionFiltro}
+                  onChange={(e) => cambiarFiltro(() => setUbicacionFiltro(e.target.value))}
+                  className="border-0 bg-transparent w-100"
+                >
+                  <option value="">Todas las ubicaciones</option>
+                  {[...opcionesUbicacion.values()].map((ubicacion) => (
+                    <option key={ubicacion.idUbicacion} value={ubicacion.idUbicacion}>
+                      {ubicacion.nombre}
+                      {lugar(ubicacion) ? ` (${lugar(ubicacion)})` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -250,11 +121,11 @@ export default function History() {
               <select
                 id="history-type"
                 value={tipoFiltro}
-                onChange={(e) => setTipoFiltro(e.target.value)}
+                onChange={(e) => cambiarFiltro(() => setTipoFiltro(e.target.value as FiltroTipo))}
               >
                 <option value="TODOS">Todos</option>
                 <option value="ACTUAL">Clima actual</option>
-                <option value="PRONÓSTICO">Pronóstico</option>
+                <option value="PRONOSTICO">Pronóstico</option>
               </select>
             </div>
 
@@ -267,18 +138,20 @@ export default function History() {
                 id="history-date"
                 type="date"
                 value={fechaFiltro}
-                onChange={(e) => setFechaFiltro(e.target.value)}
+                onChange={(e) => cambiarFiltro(() => setFechaFiltro(e.target.value))}
               />
             </div>
 
             <button
               type="button"
               className="history-filter-button"
-              onClick={() => {
-                setBusqueda("");
-                setTipoFiltro("TODOS");
-                setFechaFiltro("");
-              }}
+              onClick={() =>
+                cambiarFiltro(() => {
+                  setUbicacionFiltro("");
+                  setTipoFiltro("TODOS");
+                  setFechaFiltro("");
+                })
+              }
             >
               <i className="bi bi-arrow-counterclockwise"></i>
               Limpiar filtros
@@ -292,31 +165,36 @@ export default function History() {
 
               <div className="history-records-actions">
                 <span>
-                  {consultasFiltradas.length}{" "}
-                  {consultasFiltradas.length === 1
-                    ? "consulta"
-                    : "consultas"}
+                  {totalElementos}{" "}
+                  {totalElementos === 1 ? "consulta" : "consultas"}
                 </span>
-
-                <button
-                  type="button"
-                  className="history-clear-button"
-                  onClick={limpiarHistorial}
-                  disabled={consultas.length === 0}
-                >
-                  <i className="bi bi-trash3"></i>
-                  Limpiar historial
-                </button>
               </div>
             </div>
 
-            {consultasFiltradas.length > 0 ? (
+            {historial.error !== undefined && (
+              <div className="alert alert-danger" role="alert">
+                {mensajeDeError(historial.error, "No se pudo cargar el historial.")}
+                <button type="button" className="btn btn-link btn-sm" onClick={historial.recargar}>
+                  Reintentar
+                </button>
+              </div>
+            )}
+
+            {historial.cargando && consultas.length === 0 && historial.error === undefined && (
+              <div className="text-center py-4" role="status">
+                <div className="spinner-border text-primary" aria-hidden="true"></div>
+                <p className="mt-2">Cargando historial...</p>
+              </div>
+            )}
+
+            {consultas.length > 0 ? (
               <div className="history-table-wrapper">
                 <table className="history-table">
                   <thead>
                     <tr>
                       <th>Ubicación</th>
                       <th>Tipo de consulta</th>
+                      <th>Temperatura</th>
                       <th>Fecha</th>
                       <th>Hora</th>
                       <th>Acción</th>
@@ -324,60 +202,44 @@ export default function History() {
                   </thead>
 
                   <tbody>
-                    {consultasFiltradas.map((consulta) => (
-                      <tr key={consulta.id}>
+                    {consultas.map((consulta) => (
+                      <tr key={consulta.idConsulta}>
                         <td>
                           <div className="history-city">
-                            <strong>{consulta.ciudad}</strong>
-                            <span>{consulta.ubicacion}</span>
+                            <strong>{consulta.ubicacion.nombre}</strong>
+                            <span>{lugar(consulta.ubicacion)}</span>
                           </div>
                         </td>
 
                         <td>
                           <span
                             className={`history-type-badge ${
-                              (consulta.tipo ?? "ACTUAL") ===
-                              "PRONÓSTICO"
-                                ? "forecast"
-                                : "current"
+                              consulta.tipo === "PRONOSTICO" ? "forecast" : "current"
                             }`}
                           >
-                            {consulta.tipo ?? "ACTUAL"}
+                            {ETIQUETA_TIPO[consulta.tipo]}
                           </span>
                         </td>
 
-                        <td>{consulta.fecha}</td>
-                        <td>{consulta.hora}</td>
+                        <td>
+                          {/* PRONOSTICO no tiene mediciones: "—" (RF-11) */}
+                          {grados(consulta.temperatura)}
+                          {consulta.descripcion && (
+                            <small className="d-block text-secondary">{capitalizar(consulta.descripcion)}</small>
+                          )}
+                        </td>
+
+                        <td>{fecha(consulta.fechaConsultaUtc)}</td>
+                        <td>{hora(consulta.fechaConsultaUtc)}</td>
 
                         <td>
                           <div className="history-row-actions">
                             <button
                               type="button"
                               className="history-view-button"
-                              onClick={() =>
-                                navigate(
-                                  (consulta.tipo ?? "ACTUAL") ===
-                                    "PRONÓSTICO"
-                                    ? "/pronostico"
-                                    : `/clima?ciudad=${encodeURIComponent(
-                                        consulta.ciudad
-                                      )}`
-                                )
-                              }
+                              onClick={() => setIdDetalle(consulta.idConsulta)}
                             >
                               Ver
-                            </button>
-
-                            <button
-                              type="button"
-                              className="history-delete-button"
-                              onClick={() =>
-                                eliminarConsulta(consulta.id)
-                              }
-                              title="Eliminar consulta"
-                              aria-label={`Eliminar consulta de ${consulta.ciudad}`}
-                            >
-                              <i className="bi bi-x-lg"></i>
                             </button>
                           </div>
                         </td>
@@ -386,25 +248,46 @@ export default function History() {
                   </tbody>
                 </table>
 
-                <div className="history-table-footer">
-                  Mostrando {consultasFiltradas.length} de{" "}
-                  {consultas.length} consultas
+                <div className="history-table-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <span>
+                    Página {historial.datos?.pagina ?? pagina} de {Math.max(totalPaginas, 1)} · {totalElementos} consultas
+                  </span>
+                  <span className="d-flex gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                      disabled={pagina <= 1 || historial.cargando}
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => setPagina((p) => p + 1)}
+                      disabled={pagina >= totalPaginas || historial.cargando}
+                    >
+                      Siguiente
+                    </button>
+                  </span>
                 </div>
               </div>
             ) : (
+              historial.datos !== undefined && (
               <div className="history-empty">
                 <i className="bi bi-clock-history"></i>
                 <h3>
-                  {consultas.length === 0
-                    ? "Todavía no tienes consultas registradas"
+                  {totalElementos === 0 && !filtro.tipo && !filtro.idUbicacion && !rango && pagina === 1
+                    ? "Todavía no has consultado el clima"
                     : "No encontramos consultas"}
                 </h3>
                 <p>
-                  {consultas.length === 0
-                    ? "Las ciudades que consultes aparecerán aquí."
+                  {totalElementos === 0 && !filtro.tipo && !filtro.idUbicacion && !rango && pagina === 1
+                    ? "Las ciudades que consultes con tu sesión iniciada aparecerán aquí."
                     : "Prueba con otros filtros de búsqueda."}
                 </p>
               </div>
+              )
             )}
 
             <div className="history-info">
@@ -418,6 +301,106 @@ export default function History() {
           </section>
         </div>
       </div>
+      {idDetalle !== null && (
+        <>
+          <div className="modal d-block" role="dialog" aria-modal="true" aria-labelledby="history-detail-title" tabIndex={-1}>
+            <div className="modal-dialog modal-lg modal-dialog-scrollable">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h2 className="modal-title h5" id="history-detail-title">Detalle de la consulta</h2>
+                  <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setIdDetalle(null)}></button>
+                </div>
+                <div className="modal-body">
+                  {detalle.cargando && (
+                    <div className="text-center py-3" role="status">
+                      <div className="spinner-border text-primary" aria-hidden="true"></div>
+                    </div>
+                  )}
+                  {errorDetalle && <p className="text-danger" role="alert">{errorDetalle}</p>}
+                  {detalle.datos && (
+                    <>
+                      <p className="mb-1">
+                        <strong>{detalle.datos.ubicacion.nombre}</strong>{" "}
+                        <span className="text-secondary">{lugar(detalle.datos.ubicacion)}</span>
+                      </p>
+                      <p className="text-secondary">
+                        {ETIQUETA_TIPO[detalle.datos.tipo]} · {fecha(detalle.datos.fechaConsultaUtc)} {hora(detalle.datos.fechaConsultaUtc)}
+                      </p>
+
+                      {detalle.datos.actual && (
+                        <dl className="row mb-0">
+                          <dt className="col-6">Condición</dt>
+                          <dd className="col-6">{capitalizar(detalle.datos.actual.descripcion)}</dd>
+                          <dt className="col-6">Temperatura</dt>
+                          <dd className="col-6">{numero(detalle.datos.actual.temperatura)} °C</dd>
+                          <dt className="col-6">Sensación térmica</dt>
+                          <dd className="col-6">{numero(detalle.datos.actual.sensacionTermica)} °C</dd>
+                          <dt className="col-6">Humedad</dt>
+                          <dd className="col-6">{humedad(detalle.datos.actual.humedad)}</dd>
+                          <dt className="col-6">Viento</dt>
+                          <dd className="col-6">{viento(detalle.datos.actual.velocidadViento)}</dd>
+                          {detalle.datos.actual.detalle?.presionHpa != null && (
+                            <>
+                              <dt className="col-6">Presión</dt>
+                              <dd className="col-6">{detalle.datos.actual.detalle.presionHpa} hPa</dd>
+                            </>
+                          )}
+                        </dl>
+                      )}
+
+                      {detalle.datos.pronostico && (
+                        detalle.datos.pronostico.dias.length === 0 ? (
+                          <p className="text-secondary">No hay días guardados en esta consulta.</p>
+                        ) : (
+                          <div className="table-responsive">
+                            <table className="table table-sm align-middle">
+                              <thead>
+                                <tr>
+                                  <th>Día</th>
+                                  <th>Condición</th>
+                                  <th>Máx.</th>
+                                  <th>Mín.</th>
+                                  <th>Lluvia</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {detalle.datos.pronostico.dias.map((dia) => (
+                                  <tr key={dia.fecha}>
+                                    <td>{nombreDia(dia.fecha)} {diaCorto(dia.fecha)}</td>
+                                    <td>{capitalizar(dia.descripcion)}</td>
+                                    <td>{grados(dia.temperaturaMax)}</td>
+                                    <td>{grados(dia.temperaturaMin)}</td>
+                                    <td>{dia.probabilidadLluvia}%</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  {detalle.datos && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => consultarDeNuevo(detalle.datos!.tipo, detalle.datos!.ubicacion.idUbicacion)}
+                    >
+                      Consultar de nuevo
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => setIdDetalle(null)}>
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop show"></div>
+        </>
+      )}
     </main>
   );
 }
