@@ -15,6 +15,9 @@ public abstract class ClimaPlusControllerBase : ControllerBase
         TipoError.CredencialesInvalidas => Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Credenciales inválidas", detail: error.Mensaje),
         TipoError.CuentaDesactivada => Problem(statusCode: StatusCodes.Status403Forbidden, title: "Cuenta desactivada", detail: error.Mensaje),
         TipoError.NoEncontrado => Problem(statusCode: StatusCodes.Status404NotFound, title: "No encontrado", detail: error.Mensaje),
+        TipoError.ServicioNoDisponible => Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Servicio no disponible", detail: error.Mensaje),
+        TipoError.TiempoAgotado => Problem(statusCode: StatusCodes.Status504GatewayTimeout, title: "Tiempo de espera agotado", detail: error.Mensaje),
+        TipoError.RespuestaProveedorInvalida => Problem(statusCode: StatusCodes.Status502BadGateway, title: "Respuesta inválida del proveedor", detail: error.Mensaje),
         _ => Problem(statusCode: StatusCodes.Status500InternalServerError),
     };
 

@@ -7,6 +7,15 @@ public enum TipoError
     CredencialesInvalidas,
     CuentaDesactivada,
     NoEncontrado,
+
+    /// <summary>El proveedor externo (OpenWeather) no está disponible o no está configurado (503).</summary>
+    ServicioNoDisponible,
+
+    /// <summary>El proveedor externo no respondió a tiempo (504).</summary>
+    TiempoAgotado,
+
+    /// <summary>El proveedor externo devolvió datos inválidos (502).</summary>
+    RespuestaProveedorInvalida,
 }
 
 /// <summary>Error de negocio devuelto por un servicio. Campo = nombre del campo JSON afectado, si aplica.</summary>

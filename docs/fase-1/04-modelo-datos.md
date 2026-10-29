@@ -3,7 +3,7 @@
 **Diagrama fuente:** [`../base-datos/modelo-relacional.puml`](../base-datos/modelo-relacional.puml)
 **Imagen:** [`../base-datos/modelo-relacional.png`](../base-datos/modelo-relacional.png)
 **Detalle de campos, tipos y restricciones:** [`../base-datos/diccionario-datos.md`](../base-datos/diccionario-datos.md)
-**Estado:** aprobado – Diseño de datos FASE 1 v1.0
+**Estado:** aprobado – Diseño de datos FASE 1 v1.0, con las enmiendas E-02 y E-03 (2026-10-28) en `consulta_clima`
 
 ![Modelo relacional de ClimaPlus](../base-datos/modelo-relacional.png)
 
@@ -26,7 +26,7 @@
 | 2 | `ubicacion` | Catálogo compartido de ubicaciones meteorológicas | No pertenece a ningún usuario; se reutiliza por `UNIQUE (latitud, longitud)` con 4 decimales (D-07); guarda nombre, región y país ISO |
 | 3 | `favorito` | Ubicación guardada por un usuario | Resuelve la relación N:M usuario–ubicación; `UNIQUE (id_usuario, id_ubicacion)` |
 | 4 | `configuracion_alerta` | Regla de alerta de un usuario | Tipo `LLUVIA` / `TEMPERATURA_ALTA` / `TEMPERATURA_BAJA`; sin columna `operador` (D-10); `valor_umbral` NULL solo para lluvia; `id_ubicacion` NULL = regla global; una regla por usuario + ubicación + tipo (`NULLS NOT DISTINCT`) |
-| 5 | `consulta_clima` | Historial de consultas de usuarios autenticados | `tipo_consulta` `ACTUAL` / `PRONOSTICO` (D-03); `ACTUAL` guarda la fotografía meteorológica y `PRONOSTICO` solo el evento; las consultas anónimas no se guardan (D-04) |
+| 5 | `consulta_clima` | Registro de las consultas de clima, con o sin sesión | `tipo_consulta` `ACTUAL` / `PRONOSTICO` (D-03); `ACTUAL` guarda la fotografía meteorológica en columnas; `PRONOSTICO` guarda días y bloques normalizados en `detalle JSONB` (E-03); las consultas anónimas se guardan con `id_usuario` NULL y no aparecen en ningún historial (E-02) |
 | 6 | `dispositivo` | ESP32 registrado por un usuario | Asociado a un usuario y a una ubicación; `api_key_hash` SHA-256 único; `activo` (D-11); `ultima_conexion` (D-12) |
 | 7 | `lectura_sensor` | Medición enviada por un ESP32 | Temperatura, humedad, lluvia (`BOOLEAN`) y luz 0–100 % (D-08); al menos una medición por lectura; fecha asignada por el servidor |
 | 8 | `alerta` | Aviso generado para un usuario | Origen único: una consulta `ACTUAL` **o** una lectura del ESP32; guarda tipo, valor detectado, umbral vigente y `mensaje` (D-13); estado `NUEVA` / `LEIDA` |
@@ -39,7 +39,7 @@
 | ubicacion | es guardada en | favorito | 1 : N | favorito.id_ubicacion | RESTRICT | Evita perder favoritos sin aviso |
 | usuario | define | configuracion_alerta | 1 : N | configuracion_alerta.id_usuario | CASCADE | Preferencia; las alertas conservan su propia copia de los datos |
 | ubicacion | es objetivo de | configuracion_alerta | 0..1 : N | configuracion_alerta.id_ubicacion (NULL) | RESTRICT | `SET NULL` convertiría la regla en global sin que el usuario lo decida |
-| usuario | realiza | consulta_clima | 1 : N | consulta_clima.id_usuario | RESTRICT | Historial y estadísticas |
+| usuario | realiza | consulta_clima | 0..1 : N | consulta_clima.id_usuario (NULL = visitante, E-02) | RESTRICT | Historial y estadísticas |
 | ubicacion | es consultada en | consulta_clima | 1 : N | consulta_clima.id_ubicacion | RESTRICT | Historial |
 | usuario | posee | dispositivo | 1 : N | dispositivo.id_usuario | RESTRICT | Primero se desactiva el dispositivo |
 | ubicacion | aloja | dispositivo | 1 : N | dispositivo.id_ubicacion | RESTRICT | Todo dispositivo necesita ubicación |
@@ -77,5 +77,5 @@ EF Core crea además un índice simple para cada FK que no quede cubierta por lo
 - los roles son dos valores fijos validados con `CHECK`;
 - el JWT no se guarda (D-01);
 - las estadísticas se calculan con consultas;
-- el pronóstico no se almacena (D-03);
-- la caché va en `IMemoryCache` (D-14).
+- el pronóstico se guarda en `consulta_clima.detalle`, sin tabla propia (D-03 modificada por E-03);
+- la caché del clima es la propia `consulta_clima` (consultas recientes, D-23); `IMemoryCache` solo repite búsquedas de ubicaciones (D-14 ajustada por D-23).

@@ -298,7 +298,7 @@ Base común: fondo blanco, borde de 1 px `#E2E8F0`, radio de 12 px, sombra suave
 | **Acciones** | Ver pronóstico; guardar en favoritos (con sesión) o "Inicia sesión para guardar favoritos" (sin sesión); hacer una nueva búsqueda |
 | **Navegación** | → M05 · ★ sin sesión → M02 · Logo → M01 o M06 |
 
-> Con sesión, esta consulta se registra como `ACTUAL` en el historial y puede generar alertas. Si se genera una, se muestra un toast "Nueva alerta: …" y aumenta el contador de la campana.
+> Toda consulta se guarda como `ACTUAL` antes de mostrarse; sin sesión, con `id_usuario` NULL y fuera de cualquier historial (E-02). Con sesión, entra en el historial del usuario y puede generar alertas. Si se genera una, se muestra un toast "Nueva alerta: …" y aumenta el contador de la campana. No se muestra índice UV: requiere un plan de pago de OpenWeather.
 
 #### M05 – Pronóstico
 
@@ -311,7 +311,7 @@ Base común: fondo blanco, borde de 1 px `#E2E8F0`, radio de 12 px, sombra suave
 | **Acciones** | Seleccionar un día; volver a M04; guardar favorito |
 | **Navegación** | → M04 · ★ sin sesión → M02 |
 
-> Con sesión se registra una consulta `PRONOSTICO` (sin mediciones). El pronóstico nunca genera alertas.
+> Toda consulta se guarda como `PRONOSTICO`, con los días y bloques normalizados en `detalle` (E-03) y sin mediciones en columnas; sin sesión, con `id_usuario` NULL (E-02). El pronóstico nunca genera alertas.
 
 ---
 

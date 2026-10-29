@@ -73,6 +73,9 @@ Como el clima y el pronóstico son públicos (D-04), cualquiera podría consumir
 | Medida | Detalle |
 |---|---|
 | **Rate Limiting** de ASP.NET Core | Límite de peticiones por cliente en las rutas públicas de clima y pronóstico. |
-| **`IMemoryCache`** | Caché temporal en memoria de las respuestas meteorológicas por ubicación, para no repetir llamadas a OpenWeather en pocos minutos. |
+| **Reutilización de consultas recientes** | La caché del clima es `consulta_clima`: una consulta de la misma ubicación de menos de 10 minutos (actual) o 30 minutos (pronóstico) se reutiliza sin llamar a OpenWeather (D-23). |
+| **`IMemoryCache`** | Solo para repetir búsquedas de ubicaciones (D-23). |
 
-**No** se usará Redis ni se creará una tabla de caché. D-14 no modifica el modelo relacional. Los valores concretos (límite de peticiones y tiempo de caché) se definirán al implementar el backend.
+**No** se usará Redis ni se creará una tabla de caché. Valores aplicados: 30 peticiones por minuto por IP en `/api/clima/*` (D-23).
+
+**Privacidad de las consultas anónimas (E-02):** una fila con `id_usuario` NULL solo guarda la ubicación y los datos meteorológicos. No guarda IP ni ningún identificador del visitante, no aparece en ningún historial personal y no genera alertas.
