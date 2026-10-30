@@ -1,0 +1,18 @@
+# =====================================================================
+#  ClimaPlus – Despliegue con las imágenes publicadas por GitHub Actions (Fase 9)
+#  En el servidor, junto a docker-compose.yml, el .env y la carpeta database/migrations:
+#    docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+#    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#  Las imágenes salen de .github/workflows/cd.yml (ghcr.io/achenx-arch/...).
+#  Delante de la API y del frontend debe ir un proxy con HTTPS (ver docs/despliegue/guia-despliegue.md).
+# =====================================================================
+services:
+  api:
+    image: ghcr.io/achenx-arch/climaplus-api:${VERSION:-latest}
+    build: !reset null
+    pull_policy: always
+
+  web:
+    image: ghcr.io/achenx-arch/climaplus-web:${VERSION:-latest}
+    build: !reset null
+    pull_policy: always

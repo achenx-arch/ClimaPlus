@@ -1,0 +1,9 @@
+# Fase 9: archivos que se usan dentro de contenedores Linux o en GitHub Actions siempre con fin de línea LF,
+# aunque se editen en Windows (evita errores con "\r" en Docker, Nginx y los workflows).
+Dockerfile          text eol=lf
+.dockerignore       text eol=lf
+*.conf              text eol=lf
+*.yml               text eol=lf
+*.yaml              text eol=lf
+*.sh                text eol=lf
+.env.example        text eol=lf

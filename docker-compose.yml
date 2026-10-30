@@ -1,0 +1,68 @@
+# =====================================================================
+#  ClimaPlus – Entorno completo con Docker (Fase 9)
+#
+#    1. cp .env.example .env      (y cambia las claves)
+#    2. docker compose up -d --build
+#    3. Frontend: http://localhost:3000 · API: http://localhost:8080 · Salud: http://localhost:8080/health
+#
+#  La base de datos se crea la primera vez con las migraciones de database/migrations.
+#  Para empezar de cero (BORRA los datos de Docker): docker compose down -v
+# =====================================================================
+name: climaplus
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: climaplus_db
+      POSTGRES_USER: ${POSTGRES_USER:-climaplus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el archivo .env}
+    volumes:
+      - datos-postgres:/var/lib/postgresql/data
+      # Solo se ejecutan la primera vez (volumen vacío), en orden: 001, 002, 003.
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d climaplus_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Sin "ports": PostgreSQL no queda expuesto fuera de Docker (OWASP A05).
+    # Para verla con pgAdmin, descomenta (usa 5433 para no chocar con tu PostgreSQL local):
+    # ports:
+    #   - "5433:5432"
+
+  api:
+    build: ./backend
+    image: climaplus-api:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__ClimaPlusDb: "Host=db;Port=5432;Database=climaplus_db;Username=${POSTGRES_USER:-climaplus};Password=${POSTGRES_PASSWORD}"
+      Jwt__Clave: ${JWT_CLAVE:?Define JWT_CLAVE (32 caracteres o más) en el archivo .env}
+      OpenWeather__ApiKey: ${OPENWEATHER_API_KEY:-}
+      Cors__OrigenesPermitidos__0: ${FRONTEND_URL:-http://localhost:3000}
+      AdminInicial__Nombre: ${ADMIN_NOMBRE:-}
+      AdminInicial__Correo: ${ADMIN_CORREO:-}
+      AdminInicial__Password: ${ADMIN_PASSWORD:-}
+    ports:
+      # El ESP32 usa este puerto: http://<IP de la PC>:8080/api/lecturas
+      - "8080:8080"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${API_PUBLIC_URL:-http://localhost:8080}
+    image: climaplus-web:local
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:8080"
+
+volumes:
+  datos-postgres:
