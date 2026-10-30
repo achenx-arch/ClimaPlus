@@ -1,211 +1,165 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import "./Alerts.css";
 import "./DeviceDetails.css";
+import ResultadosUbicacion from "../components/ResultadosUbicacion";
+import { useAuth } from "../context/auth";
+import { useNotificaciones } from "../context/notificaciones";
+import { useBusquedaUbicaciones } from "../hooks/useBusquedaUbicaciones";
+import { useConsulta } from "../hooks/useConsulta";
+import { ApiError, mensajeDeError } from "../services/apiClient";
+import {
+  obtenerDispositivo,
+  actualizarDispositivo,
+  cambiarEstadoDispositivo,
+  listarLecturasDispositivo,
+  listarAlertasDispositivo,
+} from "../services/dispositivosService";
+import type { Dispositivo, LecturaDispositivo, Alerta, Ubicacion } from "../types/api";
+import {
+  CLASE_TIPO_ALERTA,
+  ICONOS_TIPO_ALERTA,
+  NOMBRES_TIPO_ALERTA,
+  lugar,
+} from "../utils/clima";
+import { fechaHora } from "../utils/fechas";
 
-type Dispositivo = {
-  id: number;
-  identificador: string;
-  nombre: string;
-  ubicacion: string;
-  estado: "Conectado" | "Desconectado";
-  temperatura: number | null;
-  humedad: number | null;
-  lluvia: string | null;
-  luminosidad: number | null;
-  ultimaLectura: string;
-};
+// M12 – Detalle de dispositivo: GET /api/dispositivos/{id},
+// GET /api/dispositivos/{id}/lecturas, GET /api/dispositivos/{id}/alertas,
+// PUT /api/dispositivos/{id}, PATCH /api/dispositivos/{id}/estado.
 
-type Lectura = {
-  fecha: string;
-  hora: string;
-  temperatura: number;
-  humedad: number;
-  lluvia: string;
-  luminosidad: number;
-};
 
-const dispositivosIniciales: Dispositivo[] = [
-  {
-    id: 1,
-    identificador: "ESP32-001",
-    nombre: "Terraza Guatemala",
-    ubicacion: "Ciudad de Guatemala, Guatemala",
-    estado: "Conectado",
-    temperatura: 22,
-    humedad: 74,
-    lluvia: "Sin lluvia",
-    luminosidad: 680,
-    ultimaLectura: "7 oct 2026 - 08:30",
-  },
-  {
-    id: 2,
-    identificador: "ESP32-002",
-    nombre: "Jardín Antigua",
-    ubicacion: "Antigua Guatemala, Guatemala",
-    estado: "Conectado",
-    temperatura: 20,
-    humedad: 81,
-    lluvia: "Lluvia",
-    luminosidad: 320,
-    ultimaLectura: "7 oct 2026 - 08:25",
-  },
-  {
-    id: 3,
-    identificador: "ESP32-003",
-    nombre: "Patio Quetzaltenango",
-    ubicacion: "Quetzaltenango, Guatemala",
-    estado: "Desconectado",
-    temperatura: 16,
-    humedad: 78,
-    lluvia: "Sin lluvia",
-    luminosidad: 410,
-    ultimaLectura: "6 oct 2026 - 16:40",
-  },
-];
-
-const historialEjemplo: Record<number, Lectura[]> = {
-  1: [
-    { fecha: "7 oct 2026", hora: "08:30", temperatura: 22, humedad: 74, lluvia: "Sin lluvia", luminosidad: 680 },
-    { fecha: "7 oct 2026", hora: "08:15", temperatura: 21.8, humedad: 75, lluvia: "Sin lluvia", luminosidad: 645 },
-    { fecha: "7 oct 2026", hora: "08:00", temperatura: 21.5, humedad: 76, lluvia: "Sin lluvia", luminosidad: 610 },
-    { fecha: "7 oct 2026", hora: "07:45", temperatura: 21, humedad: 77, lluvia: "Sin lluvia", luminosidad: 570 },
-    { fecha: "7 oct 2026", hora: "07:30", temperatura: 20.8, humedad: 78, lluvia: "Sin lluvia", luminosidad: 525 },
-    { fecha: "7 oct 2026", hora: "07:15", temperatura: 20.5, humedad: 79, lluvia: "Sin lluvia", luminosidad: 480 },
-  ],
-  2: [
-    { fecha: "7 oct 2026", hora: "08:25", temperatura: 20, humedad: 81, lluvia: "Lluvia", luminosidad: 320 },
-    { fecha: "7 oct 2026", hora: "08:10", temperatura: 19.8, humedad: 82, lluvia: "Lluvia", luminosidad: 305 },
-    { fecha: "7 oct 2026", hora: "07:55", temperatura: 19.6, humedad: 83, lluvia: "Lluvia", luminosidad: 290 },
-    { fecha: "7 oct 2026", hora: "07:40", temperatura: 19.5, humedad: 82, lluvia: "Sin lluvia", luminosidad: 310 },
-    { fecha: "7 oct 2026", hora: "07:25", temperatura: 19.4, humedad: 80, lluvia: "Sin lluvia", luminosidad: 340 },
-    { fecha: "7 oct 2026", hora: "07:10", temperatura: 19.2, humedad: 79, lluvia: "Sin lluvia", luminosidad: 365 },
-  ],
-  3: [
-    { fecha: "6 oct 2026", hora: "16:40", temperatura: 16, humedad: 78, lluvia: "Sin lluvia", luminosidad: 410 },
-    { fecha: "6 oct 2026", hora: "16:25", temperatura: 16.2, humedad: 77, lluvia: "Sin lluvia", luminosidad: 435 },
-    { fecha: "6 oct 2026", hora: "16:10", temperatura: 16.4, humedad: 76, lluvia: "Sin lluvia", luminosidad: 460 },
-    { fecha: "6 oct 2026", hora: "15:55", temperatura: 16.6, humedad: 75, lluvia: "Sin lluvia", luminosidad: 485 },
-    { fecha: "6 oct 2026", hora: "15:40", temperatura: 16.8, humedad: 74, lluvia: "Sin lluvia", luminosidad: 510 },
-    { fecha: "6 oct 2026", hora: "15:25", temperatura: 17, humedad: 73, lluvia: "Sin lluvia", luminosidad: 535 },
-  ],
-};
-
-const STORAGE_KEY = "climaplus_dispositivos";
 
 export default function DeviceDetails() {
   const { id } = useParams<{ id: string }>();
+  const idNum = Number(id);
+  const navigate = useNavigate();
+  const { usuario } = useAuth();
+  const { avisar } = useNotificaciones();
 
-  const [dispositivos, setDispositivos] = useState<Dispositivo[]>(() => {
-    try {
-      const guardados = localStorage.getItem(STORAGE_KEY);
+  // Carga del dispositivo
+  const dispositivo = useConsulta(
+    id ? `dispositivo:${id}` : null,
+    (signal) => obtenerDispositivo(idNum, signal)
+  );
+  const dev: Dispositivo | undefined = dispositivo.datos;
 
-      if (guardados) {
-        const datos = JSON.parse(guardados);
-
-        if (Array.isArray(datos)) {
-          return datos;
-        }
-      }
-    } catch {
-      console.error("No se pudieron cargar los dispositivos");
-    }
-
-    return dispositivosIniciales;
-  });
-
-  const [mostrarEdicion, setMostrarEdicion] = useState(false);
-  const [nombreEditado, setNombreEditado] = useState("");
-  const [ubicacionEditada, setUbicacionEditada] = useState("");
-  const [mensaje, setMensaje] = useState("");
-
-  const dispositivo = dispositivos.find(
-    (item) => String(item.id) === id
+  // Paginación de lecturas
+  const [paginaLecturas, setPaginaLecturas] = useState(1);
+  const [versionLecturas, setVersionLecturas] = useState(0);
+  const lecturas = useConsulta(
+    id ? `lecturas:${id}:${paginaLecturas}:${versionLecturas}:${usuario?.idUsuario}` : null,
+    (signal) => listarLecturasDispositivo(idNum, paginaLecturas, signal)
   );
 
-  const guardarDispositivos = (actualizados: Dispositivo[]) => {
-    setDispositivos(actualizados);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(actualizados));
-  };
+  // Paginación de alertas
+  const [paginaAlertas, setPaginaAlertas] = useState(1);
+  const alertas = useConsulta(
+    id ? `alertas-disp:${id}:${paginaAlertas}:${usuario?.idUsuario}` : null,
+    (signal) => listarAlertasDispositivo(idNum, paginaAlertas, signal)
+  );
+
+  // Estado de modales
+  const [mostrarEdicion, setMostrarEdicion] = useState(false);
+  const [mostrarConfirmarEstado, setMostrarConfirmarEstado] = useState(false);
+
+  // Formulario de edición
+  const [nombreEdit, setNombreEdit] = useState("");
+  const [ubicacionEdit, setUbicacionEdit] = useState<Ubicacion | null>(null);
+  const [errorNombreEdit, setErrorNombreEdit] = useState("");
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [busquedaEdit, setBusquedaEdit] = useState("");
+  const buscadorEdit = useBusquedaUbicaciones();
+
+  const [procesandoEstado, setProcesandoEstado] = useState(false);
 
   const abrirEdicion = () => {
-    if (!dispositivo) return;
-
-    setNombreEditado(dispositivo.nombre);
-    setUbicacionEditada(dispositivo.ubicacion);
+    if (!dev) return;
+    setNombreEdit(dev.nombre);
+    setUbicacionEdit(dev.ubicacion);
+    setErrorNombreEdit("");
+    setBusquedaEdit("");
+    buscadorEdit.limpiar();
     setMostrarEdicion(true);
   };
 
-  const guardarEdicion = (e: React.FormEvent<HTMLFormElement>) => {
+  const cerrarEdicion = () => {
+    setMostrarEdicion(false);
+    buscadorEdit.limpiar();
+  };
+
+  const confirmarEdicion = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!dev) return;
+    setErrorNombreEdit("");
 
-    if (!dispositivo) return;
-
-    if (!nombreEditado.trim() || !ubicacionEditada.trim()) {
+    if (!nombreEdit.trim()) {
+      setErrorNombreEdit("El nombre es obligatorio.");
+      return;
+    }
+    if (!ubicacionEdit) {
+      setErrorNombreEdit("Selecciona una ubicación.");
       return;
     }
 
-    const actualizados = dispositivos.map((item) =>
-      item.id === dispositivo.id
-        ? {
-            ...item,
-            nombre: nombreEditado.trim(),
-            ubicacion: ubicacionEditada.trim(),
-          }
-        : item
-    );
-
-    guardarDispositivos(actualizados);
-    setMostrarEdicion(false);
-    setMensaje("Dispositivo actualizado correctamente.");
+    setGuardandoEdit(true);
+    try {
+      const actualizado = await actualizarDispositivo(
+        dev.idDispositivo,
+        nombreEdit.trim(),
+        ubicacionEdit.idUbicacion
+      );
+      dispositivo.actualizar(() => actualizado);
+      cerrarEdicion();
+      avisar("Dispositivo actualizado correctamente.");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setErrorNombreEdit(error.errorDe("nombre") ?? "Ya tienes un dispositivo con ese nombre.");
+        return;
+      }
+      avisar(mensajeDeError(error, "No se pudo actualizar el dispositivo."), "error");
+    } finally {
+      setGuardandoEdit(false);
+    }
   };
 
-  const cambiarEstado = () => {
-    if (!dispositivo) return;
-
-    const nuevoEstado =
-      dispositivo.estado === "Conectado"
-        ? "Desconectado"
-        : "Conectado";
-
-    const actualizados: Dispositivo[] = dispositivos.map((item) =>
-      item.id === dispositivo.id
-        ? { ...item, estado: nuevoEstado }
-        : item
-    );
-
-    guardarDispositivos(actualizados);
-
-    setMensaje(
-      nuevoEstado === "Conectado"
-        ? "Dispositivo activado correctamente."
-        : "Dispositivo desactivado correctamente."
-    );
+  const confirmarCambioEstado = async () => {
+    if (!dev) return;
+    setProcesandoEstado(true);
+    try {
+      const actualizado = await cambiarEstadoDispositivo(dev.idDispositivo, !dev.activo);
+      dispositivo.actualizar(() => actualizado);
+      setMostrarConfirmarEstado(false);
+      avisar(
+        actualizado.activo
+          ? "Dispositivo activado correctamente."
+          : "Dispositivo desactivado. La API Key queda revocada."
+      );
+    } catch (error) {
+      avisar(mensajeDeError(error, "No se pudo cambiar el estado del dispositivo."), "error");
+    } finally {
+      setProcesandoEstado(false);
+    }
   };
 
-  if (!dispositivo) {
+  // ── 404 ──────────────────────────────────────────────────────
+  if (
+    dispositivo.error !== undefined &&
+    dispositivo.error instanceof ApiError &&
+    dispositivo.error.status === 404
+  ) {
     return (
       <main className="device-details-page">
         <div className="alerts-layout">
-
           <div className="device-details-container">
-            {/* Módulo ESP32 pendiente: estos datos son de demostración (fase de dispositivos). */}
-            <div className="alert alert-warning d-flex gap-2 align-items-start" role="note">
-              <i className="bi bi-hourglass-split" aria-hidden="true"></i>
-              <span>
-                Módulo pendiente (dispositivos ESP32, RF-20 a RF-24). Los datos de esta pantalla son de
-                demostración: se guardan solo en este navegador y no se envían al servidor.
-              </span>
-            </div>
             <Link to="/dispositivos" className="device-details-breadcrumb">
               Mis dispositivos
             </Link>
-
             <div className="device-details-empty">
               <i className="bi bi-exclamation-circle"></i>
-              <h2>Dispositivo no encontrado</h2>
-              <p>No encontramos información del dispositivo solicitado.</p>
-              <Link to="/dispositivos">Volver a dispositivos</Link>
+              <h2>El dispositivo no existe</h2>
+              <p>No encontramos información del dispositivo solicitado o no te pertenece.</p>
+              <Link to="/dispositivos">Volver a mis dispositivos</Link>
             </div>
           </div>
         </div>
@@ -213,38 +167,67 @@ export default function DeviceDetails() {
     );
   }
 
-  const historial = historialEjemplo[dispositivo.id] ?? [];
+  // ── CARGA ─────────────────────────────────────────────────────
+  if (dispositivo.cargando && !dev) {
+    return (
+      <main className="device-details-page">
+        <div className="alerts-layout">
+          <div className="device-details-container">
+            <div className="text-center py-5" role="status">
+              <div className="spinner-border text-primary" aria-hidden="true"></div>
+              <p className="mt-2">Cargando dispositivo...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // ── ERROR GENÉRICO ────────────────────────────────────────────
+  if (dispositivo.error !== undefined && !dev) {
+    return (
+      <main className="device-details-page">
+        <div className="alerts-layout">
+          <div className="device-details-container">
+            <Link to="/dispositivos" className="device-details-breadcrumb">
+              Mis dispositivos
+            </Link>
+            <div className="alert alert-danger" role="alert">
+              {mensajeDeError(dispositivo.error, "No se pudo cargar el dispositivo.")}
+              <button type="button" className="btn btn-link btn-sm" onClick={dispositivo.recargar}>
+                Reintentar
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!dev) return null;
+
+  const ul = dev.ultimaLectura;
+  const listaLecturas: LecturaDispositivo[] = lecturas.datos?.elementos ?? [];
+  const listaAlertas: Alerta[] = alertas.datos?.elementos ?? [];
 
   return (
     <main className="device-details-page">
       <div className="alerts-layout">
 
         <div className="device-details-container">
-          {/* Módulo ESP32 pendiente: estos datos son de demostración (fase de dispositivos). */}
-          <div className="alert alert-warning d-flex gap-2 align-items-start" role="note">
-            <i className="bi bi-hourglass-split" aria-hidden="true"></i>
-            <span>
-              Módulo pendiente (dispositivos ESP32, RF-20 a RF-24). Los datos de esta pantalla son de
-              demostración: se guardan solo en este navegador y no se envían al servidor.
-            </span>
-          </div>
           {/* RUTA */}
           <div className="device-details-breadcrumb">
             <Link to="/dispositivos">Mis dispositivos</Link>
-            <span>/ Detalle</span>
+            <span>/ {dev.nombre}</span>
           </div>
 
           {/* ENCABEZADO */}
-          <span className="device-details-label">
-            DETALLE DISPOSITIVO
-          </span>
+          <span className="device-details-label">DETALLE DISPOSITIVO</span>
 
           <div className="device-details-header">
             <div>
-              <h1>{dispositivo.nombre}</h1>
-              <p>
-                {dispositivo.ubicacion} · Dispositivo ambiental ESP32
-              </p>
+              <h1>{dev.nombre}</h1>
+              <p>{lugar(dev.ubicacion)} · ESP32</p>
             </div>
 
             <div className="device-details-actions">
@@ -260,21 +243,21 @@ export default function DeviceDetails() {
               <button
                 type="button"
                 className="device-details-toggle"
-                onClick={cambiarEstado}
+                onClick={() => setMostrarConfirmarEstado(true)}
               >
-                {dispositivo.estado === "Conectado"
-                  ? "Desactivar"
-                  : "Activar"}
+                {dev.activo ? "Desactivar" : "Activar"}
+              </button>
+
+              <button
+                type="button"
+                className="device-details-edit"
+                onClick={() => navigate("/dispositivos")}
+              >
+                <i className="bi bi-arrow-left"></i>
+                Volver
               </button>
             </div>
           </div>
-
-          {mensaje && (
-            <div className="device-details-success" role="status">
-              <i className="bi bi-check-circle"></i>
-              {mensaje}
-            </div>
-          )}
 
           {/* ESTADO */}
           <section className="device-details-status-panel">
@@ -285,46 +268,32 @@ export default function DeviceDetails() {
 
               <div>
                 <span>Estado del dispositivo</span>
-
                 <div className="device-details-badges">
-                  <span
-                    className={
-                      dispositivo.estado === "Conectado"
-                        ? "device-details-badge active"
-                        : "device-details-badge inactive"
-                    }
-                  >
-                    {dispositivo.estado === "Conectado"
-                      ? "Activo"
-                      : "Inactivo"}
+                  <span className={dev.activo ? "device-details-badge active" : "device-details-badge inactive"}>
+                    {dev.activo ? "Activo" : "Inactivo"}
                   </span>
-
-                  <span
-                    className={
-                      dispositivo.estado === "Conectado"
-                        ? "device-details-badge connected"
-                        : "device-details-badge disconnected"
-                    }
-                  >
-                    {dispositivo.estado === "Conectado"
-                      ? "Conectado"
-                      : "Sin conexión"}
+                  <span className={dev.enLinea ? "device-details-badge connected" : "device-details-badge disconnected"}>
+                    {dev.enLinea ? "En línea" : "Fuera de línea"}
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="device-details-last-connection">
-              <span>Última conexión registrada</span>
-              <strong>{dispositivo.ultimaLectura}</strong>
+              <span>Última conexión</span>
+              <strong>
+                {dev.ultimaConexion
+                  ? fechaHora(dev.ultimaConexion)
+                  : "Nunca conectado"}
+              </strong>
             </div>
           </section>
 
-          {/* LECTURAS */}
+          {/* 4 TARJETAS ÚLTIMA LECTURA */}
           <section className="device-details-section">
             <div className="device-details-section-header">
-              <h2>Lectura más reciente</h2>
-              <span>{dispositivo.ultimaLectura}</span>
+              <h2>Última lectura</h2>
+              {ul && <span>{fechaHora(ul.fechaLectura)}</span>}
             </div>
 
             <div className="device-details-grid">
@@ -332,15 +301,10 @@ export default function DeviceDetails() {
                 <div className="device-details-sensor-icon">
                   <i className="bi bi-thermometer-half"></i>
                 </div>
-
                 <div>
                   <span>Temperatura</span>
-                  <h3>
-                    {dispositivo.temperatura !== null
-                      ? `${dispositivo.temperatura} °C`
-                      : "Sin datos"}
-                  </h3>
-                  <p>Sensor de temperatura</p>
+                  <h3>{ul?.temperatura !== null && ul?.temperatura !== undefined ? `${ul.temperatura} °C` : "—"}</h3>
+                  <p>Sensor BME280</p>
                 </div>
               </article>
 
@@ -348,14 +312,9 @@ export default function DeviceDetails() {
                 <div className="device-details-sensor-icon">
                   <i className="bi bi-droplet"></i>
                 </div>
-
                 <div>
                   <span>Humedad</span>
-                  <h3>
-                    {dispositivo.humedad !== null
-                      ? `${dispositivo.humedad}%`
-                      : "Sin datos"}
-                  </h3>
+                  <h3>{ul?.humedad !== null && ul?.humedad !== undefined ? `${ul.humedad}%` : "—"}</h3>
                   <p>Humedad relativa</p>
                 </div>
               </article>
@@ -364,17 +323,16 @@ export default function DeviceDetails() {
                 <div className="device-details-sensor-icon">
                   <i className="bi bi-cloud-rain"></i>
                 </div>
-
                 <div>
                   <span>Lluvia</span>
-                  <h3>{dispositivo.lluvia ?? "Sin datos"}</h3>
-                  <p>
-                    {dispositivo.lluvia === "Sin lluvia"
-                      ? "No detectada"
-                      : dispositivo.lluvia === "Lluvia"
-                      ? "Detectada"
-                      : "Sin lecturas"}
-                  </p>
+                  <h3>
+                    {ul?.lluvia === null || ul?.lluvia === undefined
+                      ? "—"
+                      : ul.lluvia
+                      ? "Sí"
+                      : "No"}
+                  </h3>
+                  <p>Sensor LM393</p>
                 </div>
               </article>
 
@@ -382,154 +340,395 @@ export default function DeviceDetails() {
                 <div className="device-details-sensor-icon">
                   <i className="bi bi-brightness-high"></i>
                 </div>
-
                 <div>
                   <span>Luz</span>
-                  <h3>
-                    {dispositivo.luminosidad !== null
-                      ? `${dispositivo.luminosidad} lx`
-                      : "Sin datos"}
-                  </h3>
-                  <p>Iluminancia</p>
+                  <h3>{ul?.luz !== null && ul?.luz !== undefined ? `${ul.luz}%` : "—"}</h3>
+                  <p>LDR normalizado</p>
                 </div>
               </article>
             </div>
           </section>
 
-          {/* HISTORIAL */}
+          {/* TABLA DE LECTURAS PAGINADA */}
           <section className="device-details-section">
             <div className="device-details-section-header">
-              <h2>Historial reciente de lecturas</h2>
+              <h2>Historial de lecturas</h2>
+              <button
+                type="button"
+                className="device-details-edit"
+                onClick={() => setVersionLecturas((v) => v + 1)}
+                disabled={lecturas.cargando}
+              >
+                <i className="bi bi-arrow-clockwise"></i>
+                Actualizar
+              </button>
             </div>
 
-            <div className="device-details-table-wrapper">
-              <table className="device-details-table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Hora</th>
-                    <th>Temperatura</th>
-                    <th>Humedad</th>
-                    <th>Lluvia</th>
-                    <th>Luz</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {historial.length > 0 ? (
-                    historial.map((lectura, index) => (
-                      <tr key={index}>
-                        <td>{lectura.fecha}</td>
-                        <td>{lectura.hora}</td>
-                        <td>{lectura.temperatura} °C</td>
-                        <td>{lectura.humedad}%</td>
-                        <td>{lectura.lluvia}</td>
-                        <td>{lectura.luminosidad} lx</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="device-details-no-data">
-                        Este dispositivo todavía no tiene lecturas registradas.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-
-              <div className="device-details-table-footer">
-                {historial.length} lecturas almacenadas · Más recientes primero
+            {lecturas.cargando && !lecturas.datos && (
+              <div className="text-center py-3" role="status">
+                <div className="spinner-border spinner-border-sm text-primary" aria-hidden="true"></div>
+                <span className="ms-2">Cargando lecturas...</span>
               </div>
-            </div>
+            )}
+
+            {lecturas.error && (
+              <div className="alert alert-danger" role="alert">
+                {mensajeDeError(lecturas.error, "No se pudieron cargar las lecturas.")}
+              </div>
+            )}
+
+            {lecturas.datos && (
+              <>
+                <div className="device-details-table-wrapper">
+                  <table className="device-details-table">
+                    <thead>
+                      <tr>
+                        <th>Fecha y hora</th>
+                        <th>Temperatura</th>
+                        <th>Humedad</th>
+                        <th>Lluvia</th>
+                        <th>Luz</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {listaLecturas.length > 0 ? (
+                        listaLecturas.map((l) => (
+                          <tr key={l.idLectura}>
+                            <td>{fechaHora(l.fechaLectura)}</td>
+                            <td>{l.temperatura !== null ? `${l.temperatura} °C` : "—"}</td>
+                            <td>{l.humedad !== null ? `${l.humedad}%` : "—"}</td>
+                            <td>{l.lluvia === null ? "—" : l.lluvia ? "Sí" : "No"}</td>
+                            <td>{l.luz !== null ? `${l.luz}%` : "—"}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="device-details-no-data">
+                            Este dispositivo todavía no tiene lecturas registradas.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Paginación */}
+                {lecturas.datos.totalPaginas > 1 && (
+                  <div className="device-details-pagination" style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "16px" }}>
+                    <button
+                      type="button"
+                      className="devices-cancel-button"
+                      onClick={() => setPaginaLecturas((p) => Math.max(1, p - 1))}
+                      disabled={paginaLecturas <= 1}
+                    >
+                      Anterior
+                    </button>
+                    <span style={{ alignSelf: "center", fontSize: "13px", color: "#7895b5" }}>
+                      Página {lecturas.datos.pagina} de {lecturas.datos.totalPaginas} · {lecturas.datos.totalElementos} lecturas
+                    </span>
+                    <button
+                      type="button"
+                      className="devices-cancel-button"
+                      onClick={() => setPaginaLecturas((p) => Math.min(lecturas.datos!.totalPaginas, p + 1))}
+                      disabled={paginaLecturas >= lecturas.datos.totalPaginas}
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                )}
+
+                <div className="device-details-table-footer">
+                  {lecturas.datos.totalElementos} lecturas registradas · Más recientes primero
+                </div>
+              </>
+            )}
           </section>
 
-          {/* AVISO */}
-          <div className="device-details-note">
-            <i className="bi bi-info-circle"></i>
-            <p>
-              La conexión se determina según la última conexión registrada.
-              Esta vista muestra lecturas almacenadas, no datos en vivo.
-            </p>
-          </div>
+          {/* ALERTAS DEL DISPOSITIVO */}
+          <section className="device-details-section">
+            <div className="device-details-section-header">
+              <h2>Alertas de este dispositivo</h2>
+              {alertas.datos && (
+                <span>{alertas.datos.totalElementos} alertas generadas</span>
+              )}
+            </div>
 
-          <footer className="device-details-footer">
-            Datos de ejemplo · ClimaPlus Fase 1 · Octubre 2026
-          </footer>
+            {alertas.cargando && !alertas.datos && (
+              <div className="text-center py-3" role="status">
+                <div className="spinner-border spinner-border-sm text-primary" aria-hidden="true"></div>
+                <span className="ms-2">Cargando alertas...</span>
+              </div>
+            )}
+
+            {alertas.datos !== undefined && listaAlertas.length === 0 && (
+              <p style={{ color: "#7895b5", fontSize: "14px" }}>
+                Este dispositivo no ha generado alertas todavía.
+              </p>
+            )}
+
+            {listaAlertas.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {listaAlertas.map((alerta) => (
+                  <div
+                    key={alerta.idAlerta}
+                    style={{
+                      display: "flex",
+                      gap: "14px",
+                      padding: "14px",
+                      background: "#ffffff",
+                      border: "1px solid #d9e9f7",
+                      borderRadius: "12px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: "10px",
+                        background:
+                          CLASE_TIPO_ALERTA[alerta.tipo] === "lluvia"
+                            ? "#e0f2ff"
+                            : CLASE_TIPO_ALERTA[alerta.tipo] === "calor"
+                            ? "#fff3e0"
+                            : "#e8f5e9",
+                        display: "grid",
+                        placeItems: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <i
+                        className={`bi ${ICONOS_TIPO_ALERTA[alerta.tipo]}`}
+                        style={{
+                          color:
+                            CLASE_TIPO_ALERTA[alerta.tipo] === "lluvia"
+                              ? "#087db8"
+                              : CLASE_TIPO_ALERTA[alerta.tipo] === "calor"
+                              ? "#e65100"
+                              : "#2e7d32",
+                        }}
+                      ></i>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                        <strong style={{ fontSize: "14px", color: "#123455" }}>
+                          {NOMBRES_TIPO_ALERTA[alerta.tipo]}
+                        </strong>
+                        <span
+                          style={{
+                            padding: "3px 10px",
+                            borderRadius: "20px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            background: alerta.estado === "NUEVA" ? "#e0f2ff" : "#f1f5f9",
+                            color: alerta.estado === "NUEVA" ? "#087db8" : "#7895b5",
+                          }}
+                        >
+                          {alerta.estado === "NUEVA" ? "Nueva" : "Leída"}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: "13px", color: "#7895b5", margin: "0 0 4px" }}>
+                        {alerta.mensaje}
+                      </p>
+                      <small style={{ fontSize: "12px", color: "#9bb0c6" }}>
+                        {fechaHora(alerta.fechaGeneracion)}
+                      </small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {alertas.datos && alertas.datos.totalPaginas > 1 && (
+              <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="devices-cancel-button"
+                  onClick={() => setPaginaAlertas((p) => Math.max(1, p - 1))}
+                  disabled={paginaAlertas <= 1}
+                >
+                  Anterior
+                </button>
+                <span style={{ alignSelf: "center", fontSize: "13px", color: "#7895b5" }}>
+                  {alertas.datos.pagina} / {alertas.datos.totalPaginas}
+                </span>
+                <button
+                  type="button"
+                  className="devices-cancel-button"
+                  onClick={() => setPaginaAlertas((p) => Math.min(alertas.datos!.totalPaginas, p + 1))}
+                  disabled={paginaAlertas >= alertas.datos.totalPaginas}
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+          </section>
         </div>
       </div>
 
-      {/* MODAL DE EDICIÓN */}
+      {/* ── MODAL EDICIÓN ────────────────────────────────── */}
       {mostrarEdicion && (
         <div
           className="device-details-modal-overlay"
-          onClick={() => setMostrarEdicion(false)}
+          onClick={cerrarEdicion}
         >
           <div
             className="device-details-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="device-edit-title"
+            aria-labelledby="modal-edit-titulo"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="device-details-modal-header">
-              <h2 id="device-edit-title">Editar dispositivo</h2>
-
+              <h2 id="modal-edit-titulo">Editar dispositivo</h2>
               <button
                 type="button"
-                onClick={() => setMostrarEdicion(false)}
+                onClick={cerrarEdicion}
                 aria-label="Cerrar"
               >
                 <i className="bi bi-x-lg"></i>
               </button>
             </div>
 
-            <form onSubmit={guardarEdicion}>
+            <form onSubmit={(e) => { void confirmarEdicion(e); }}>
               <div className="device-details-form-group">
-                <label htmlFor="edit-device-name">
-                  Nombre del dispositivo
-                </label>
-
+                <label htmlFor="det-edit-nombre">Nombre del dispositivo</label>
                 <input
-                  id="edit-device-name"
+                  id="det-edit-nombre"
                   type="text"
-                  value={nombreEditado}
-                  onChange={(e) => setNombreEditado(e.target.value)}
-                  maxLength={80}
-                  required
-                />
-              </div>
-
-              <div className="device-details-form-group">
-                <label htmlFor="edit-device-location">
-                  Ubicación
-                </label>
-
-                <input
-                  id="edit-device-location"
-                  type="text"
-                  value={ubicacionEditada}
-                  onChange={(e) => setUbicacionEditada(e.target.value)}
+                  value={nombreEdit}
+                  onChange={(e) => setNombreEdit(e.target.value)}
                   maxLength={100}
                   required
                 />
+                {errorNombreEdit && (
+                  <div className="devices-form-error" role="alert">{errorNombreEdit}</div>
+                )}
+              </div>
+
+              <div className="device-details-form-group">
+                <label htmlFor="det-edit-ubicacion">Ubicación</label>
+
+                {ubicacionEdit ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", background: "#f1f8ff", borderRadius: "8px" }}>
+                    <i className="bi bi-geo-alt-fill" style={{ color: "#087db8" }}></i>
+                    <span style={{ flex: 1, fontSize: "14px" }}>
+                      <strong>{ubicacionEdit.nombre}</strong>{" "}
+                      <span style={{ color: "#7895b5" }}>{lugar(ubicacionEdit)}</span>
+                    </span>
+                    <button
+                      type="button"
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#7895b5" }}
+                      onClick={() => { setUbicacionEdit(null); setBusquedaEdit(""); buscadorEdit.limpiar(); }}
+                    >
+                      <i className="bi bi-x"></i>
+                    </button>
+                  </div>
+                ) : (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); void buscadorEdit.buscar(busquedaEdit); }}
+                    style={{ display: "flex", gap: "8px" }}
+                  >
+                    <input
+                      id="det-edit-ubicacion"
+                      type="search"
+                      value={busquedaEdit}
+                      onChange={(e) => setBusquedaEdit(e.target.value)}
+                      placeholder="Buscar ciudad o municipio"
+                      maxLength={100}
+                      style={{ flex: 1, padding: "10px 12px", border: "1px solid #d9e9f7", borderRadius: "8px", fontSize: "14px" }}
+                    />
+                    <button
+                      type="submit"
+                      className="devices-save-button"
+                      style={{ padding: "10px 14px" }}
+                      disabled={buscadorEdit.buscando}
+                    >
+                      {buscadorEdit.buscando ? "..." : "Buscar"}
+                    </button>
+                  </form>
+                )}
+
+                {buscadorEdit.error && (
+                  <div className="devices-form-error" role="alert">{buscadorEdit.error}</div>
+                )}
+                {buscadorEdit.resultados && (
+                  <ResultadosUbicacion
+                    resultados={buscadorEdit.resultados}
+                    alElegir={(u) => { setUbicacionEdit(u); buscadorEdit.limpiar(); }}
+                    textoAccion="Seleccionar"
+                  />
+                )}
               </div>
 
               <div className="device-details-modal-actions">
-                <button
-                  type="button"
-                  onClick={() => setMostrarEdicion(false)}
-                >
-                  Cancelar
-                </button>
-
-                <button type="submit">
-                  Guardar cambios
+                <button type="button" onClick={cerrarEdicion}>Cancelar</button>
+                <button type="submit" disabled={guardandoEdit}>
+                  {guardandoEdit ? "Guardando..." : "Guardar cambios"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* ── MODAL CONFIRMAR CAMBIO DE ESTADO ─────────────── */}
+      {mostrarConfirmarEstado && (
+        <div
+          className="device-details-modal-overlay"
+          onClick={() => setMostrarConfirmarEstado(false)}
+        >
+          <div
+            className="device-details-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-estado-titulo"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "420px" }}
+          >
+            <div className="device-details-modal-header">
+              <h2 id="modal-estado-titulo">
+                {dev.activo ? "Desactivar dispositivo" : "Activar dispositivo"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setMostrarConfirmarEstado(false)}
+                aria-label="Cerrar"
+              >
+                <i className="bi bi-x-lg"></i>
+              </button>
+            </div>
+
+            {dev.activo ? (
+              <p style={{ color: "#7895b5", fontSize: "14px", marginBottom: "20px" }}>
+                Al desactivar <strong>{dev.nombre}</strong>, la API Key quedará revocada de inmediato
+                y el dispositivo recibirá error <code>403</code> en su siguiente lectura.
+              </p>
+            ) : (
+              <p style={{ color: "#7895b5", fontSize: "14px", marginBottom: "20px" }}>
+                ¿Activar <strong>{dev.nombre}</strong>? Podrá volver a enviar lecturas.
+              </p>
+            )}
+
+            <div className="device-details-modal-actions">
+              <button type="button" onClick={() => setMostrarConfirmarEstado(false)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => { void confirmarCambioEstado(); }}
+                disabled={procesandoEstado}
+                style={dev.activo ? { background: "#c33c3c", color: "#fff", border: "none" } : {}}
+              >
+                {procesandoEstado
+                  ? "Procesando..."
+                  : dev.activo
+                  ? "Sí, desactivar"
+                  : "Sí, activar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
-}
+}

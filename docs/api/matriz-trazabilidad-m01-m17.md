@@ -28,8 +28,8 @@
 | M08 Historial | Usuario / Administrador (su cuenta) | RF-11 | Verificado (308 pruebas y Swagger) | — |
 | M09 Alertas | Usuario | RF-17, RF-18 | Verificado (221 pruebas); alertas reales con el motor 2H, sin verificar | — |
 | M10 Configuración de alertas | Usuario | RF-12 a RF-15 | Verificado (182 pruebas, 7 escenarios manuales) | — |
-| M11 Mis dispositivos | Usuario | RF-20, RF-21, RF-22 | Backend implementado (Fase 7), sin verificar en Windows; frontend con datos simulados | Pantalla React (Fase 7) |
-| M12 Detalle dispositivo | Usuario | RF-22, RF-23 | Backend implementado (Fase 7), sin verificar en Windows; frontend con datos simulados | Pantalla React (Fase 7) |
+| M11 Mis dispositivos | Usuario | RF-20, RF-21, RF-22 | Backend verificado (488 pruebas en Windows); frontend conectado a la API real, sin verificar en Windows (`test/dispositivos.test.tsx`) | — |
+| M12 Detalle dispositivo | Usuario | RF-22, RF-23 | Backend verificado (488 pruebas en Windows); frontend conectado a la API real, sin verificar en Windows (`test/dispositivos.test.tsx`) | — |
 | M13 Dashboard administrador | Administrador | RF-25 | No implementado | Datos de consultas (E-02/E-03) y dispositivos |
 | M14 Gestión de usuarios | Administrador | RF-26, RF-27, RF-28 | No implementado | Ninguno técnico (usa la tabla `usuario`) |
 | M15 Alertas del sistema | Administrador | RF-29 | Verificado (221 pruebas); alertas reales con el motor 2H, sin verificar | — |
@@ -88,13 +88,13 @@
 | Historial | RF-11 | Verificado (2G) | — |
 | Motor de alertas | RF-16, RF-24 | Implementado para ambos orígenes (consulta 2H, lectura Fase 7) | — |
 | Gestión de usuarios | RF-26, RF-27, RF-28 | **Sí**: usa solo la tabla `usuario` | — |
-| Dispositivos | RF-20 a RF-23 | Backend implementado (Fase 7) | Pantallas M11 y M12 en React |
-| Lecturas ESP32 | RF-24 | Backend implementado (Fase 7) | Firmware del ESP32 |
+| Dispositivos | RF-20 a RF-23 | Backend y pantallas M11/M12 implementados (Fase 7) | Verificar M11/M12 en Windows |
+| Lecturas ESP32 | RF-24 | Backend y firmware implementados (Fase 7, `hardware/esp32`) | Prueba con la placa real |
 | Estadísticas | RF-25 | Sí (usuarios, consultas y alertas); dispositivos cuando exista RF-20 | — |
 
 ## Funciones pendientes por tipo
 
-- **Dispositivos ESP32:** RF-20 a RF-24 con backend implementado en la Fase 7 (`contrato-dispositivos-lecturas.md`). Faltan las pantallas M11/M12 y el firmware.
+- **Dispositivos ESP32:** RF-20 a RF-24 con backend implementado en la Fase 7 (`contrato-dispositivos-lecturas.md`). Pantallas M11/M12 conectadas a la API y firmware en `hardware/esp32` (compila con el paquete esp32 3.0.7). Falta la prueba con la placa real.
 - **Administración:** RF-26 a RF-28 (M14). Nada implementado; RF-29 (M15) implementado sin verificar.
 - **Estadísticas:** RF-25 (M13). Nada implementado.
 - **Usuario:** RF-16 (motor) implementado sin verificar; falta su origen ESP32. RF-19 (M06) parcial.
