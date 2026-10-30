@@ -8,6 +8,7 @@ import Alerts from "../pages/Alerts";
 import Favorites from "../pages/Favorites";
 import History from "../pages/History";
 import UserProfile from "../pages/UserProfile";
+import { CLAVE_SESION } from "../context/AuthProvider";
 import {
   administrador,
   alerta,
@@ -422,6 +423,27 @@ describe("M16 – perfil", () => {
       passwordActual: "Mala2026",
       passwordNueva: "NuevaClave2027",
     });
+  });
+});
+
+describe("seguridad – Fase 8", () => {
+  it("al cambiar la contraseña cierra la sesión porque el backend revoca los tokens", async () => {
+    const servidor = servidorConSesion()
+      .en("GET", "/api/usuarios/me", { cuerpo: usuario })
+      .en("PUT", "/api/usuarios/me/password", { status: 204 });
+    renderizar(<UserProfile />, { ruta: "/perfil" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar contraseña" }));
+    await usuarioEvento.type(screen.getByLabelText("Contraseña actual"), "Actual2026");
+    await usuarioEvento.type(screen.getByLabelText("Nueva contraseña"), "NuevaClave2027");
+    await usuarioEvento.type(screen.getByLabelText("Confirmar nueva contraseña"), "NuevaClave2027");
+    await usuarioEvento.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cambiar contraseña" }));
+
+    await waitFor(() => expect(screen.getByTestId("ruta")).toHaveTextContent("/login"));
+    expect(screen.getByText("Pantalla de inicio de sesión")).toBeInTheDocument();
+    expect(sessionStorage.getItem(CLAVE_SESION)).toBeNull();
+    expect(servidor.a("/api/usuarios/me/password", "PUT")).toHaveLength(1);
   });
 });
 

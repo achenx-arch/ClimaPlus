@@ -16,6 +16,11 @@ export interface ValorAuth {
   iniciarSesion: (correo: string, password: string, recordar: boolean) => Promise<Usuario>;
   /** Cierra la sesión (solo en el navegador; no hay logout en el backend) y vuelve a Inicio. */
   cerrarSesion: () => void;
+  /**
+   * Termina la sesión y lleva a M02 mostrando un mensaje. Se usa cuando el backend ya revocó la sesión
+   * (por ejemplo, al cambiar la contraseña – Fase 8, OWASP A07).
+   */
+  cerrarSesionConMensaje: (mensaje: string) => void;
   actualizarUsuario: (usuario: Usuario) => void;
   limpiarMensajeSesion: () => void;
 }

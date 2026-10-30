@@ -17,7 +17,7 @@ const POLITICA_PASSWORD = /^(?=.*\p{L})(?=.*\d).{8,128}$/u;
 export default function UserProfile() {
   const location = useLocation();
   const esAdministrador = location.pathname.startsWith("/admin");
-  const { usuario, actualizarUsuario } = useAuth();
+  const { usuario, actualizarUsuario, cerrarSesionConMensaje } = useAuth();
   const { avisar } = useNotificaciones();
 
   const consultaPerfil = useConsulta(`perfil:${usuario?.idUsuario}`, (signal) => obtenerPerfil(signal));
@@ -122,7 +122,9 @@ export default function UserProfile() {
       // No se guarda ninguna contraseña en el navegador.
       await cambiarPassword({ passwordActual, passwordNueva });
       cerrarModalPassword();
-      avisar("Contraseña actualizada");
+      // Fase 8 (OWASP A07): el backend revoca todas las sesiones al cambiar la contraseña,
+      // así que se cierra la sesión actual y se pide entrar con la contraseña nueva.
+      cerrarSesionConMensaje("Contraseña actualizada. Por seguridad, inicia sesión de nuevo con tu nueva contraseña.");
     } catch (error) {
       if (error instanceof ApiError) {
         setMensajePassword(error.errorDe("passwordActual") ?? error.errorDe("passwordNueva") ?? error.message);
