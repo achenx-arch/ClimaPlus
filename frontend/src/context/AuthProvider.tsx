@@ -165,6 +165,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     navigateRef.current("/", { replace: true });
   }, [limpiarSesion, location.pathname]);
 
+  const cerrarSesionConMensaje = useCallback((mensaje: string) => {
+    terminarSesion(mensaje);
+    navigateRef.current("/login", { replace: true });
+  }, [terminarSesion]);
+
   const valor = useMemo<ValorAuth>(
     () => ({
       estado,
@@ -173,10 +178,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mensajeSesion,
       iniciarSesion,
       cerrarSesion,
+      cerrarSesionConMensaje,
       actualizarUsuario: setUsuario,
       limpiarMensajeSesion: () => setMensajeSesion(null),
     }),
-    [estado, usuario, mensajeSesion, iniciarSesion, cerrarSesion]
+    [estado, usuario, mensajeSesion, iniciarSesion, cerrarSesion, cerrarSesionConMensaje]
   );
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;

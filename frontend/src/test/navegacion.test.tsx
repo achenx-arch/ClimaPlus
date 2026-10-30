@@ -296,6 +296,7 @@ describe("cierre de sesión: destino final", () => {
       mensajeSesion: null,
       iniciarSesion: async () => usuario,
       cerrarSesion: () => {},
+      cerrarSesionConMensaje: () => {},
       actualizarUsuario: () => {},
       limpiarMensajeSesion: () => {},
     };
