@@ -65,6 +65,21 @@ jobs:
           --logger "trx;LogFileName=resultados-backend.trx"
           --results-directory TestResults
 
+      - name: Mostrar las pruebas fallidas en el resumen
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+          ns = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          for archivo in glob.glob("TestResults/*.trx"):
+              for r in ET.parse(archivo).getroot().iterfind(".//t:UnitTestResult", ns):
+                  if r.get("outcome") == "Failed":
+                      m = r.find(".//t:Message", ns)
+                      texto = " ".join((m.text or "").split())[:900] if m is not None else ""
+                      print(f"::error title={r.get('testName')}::{texto}")
+          PY
+
       - name: Ninguna prueba omitida (las de PostgreSQL deben ejecutarse)
         run: |
           omitidas=$(grep -o 'outcome="NotExecuted"' TestResults/resultados-backend.trx | wc -l)

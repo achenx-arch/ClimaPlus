@@ -1,32 +1,55 @@
-# Fase 9 (OWASP A06): Dependabot revisa cada semana las dependencias y abre Pull Requests con las actualizaciones.
+# Fase 9 (OWASP A06): Dependabot revisa cada semana las dependencias y abre Pull Requests.
+# Solo propone versiones menores y parches: los saltos de versión mayor (.NET 8 → 10, Node 22 → 25,
+# TypeScript 5 → 7…) cambian la plataforma y se deciden a mano. Las actualizaciones de seguridad
+# se proponen siempre, aunque sean mayores.
 version: 2
 updates:
   - package-ecosystem: nuget
     directory: /backend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
-      microsoft:
-        patterns: ["Microsoft.*", "System.*"]
+      nuget:
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      npm:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
 
+  # Imágenes base: se mantienen en .NET 8 (LTS) y Node 22 (LTS).
   - package-ecosystem: docker
     directory: /backend
     schedule:
-      interval: weekly
+      interval: monthly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: docker
     directory: /frontend
     schedule:
-      interval: weekly
+      interval: monthly
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

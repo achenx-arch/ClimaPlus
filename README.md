@@ -1,6 +1,8 @@
 # ClimaPlus
 
 **Panel de clima y alertas ambientales**
+
+[![CI](https://github.com/achenx-arch/ClimaPlus/actions/workflows/ci.yml/badge.svg)](https://github.com/achenx-arch/ClimaPlus/actions/workflows/ci.yml)
 Proyecto final del curso **Desarrollo Web** – Universidad Mariano Gálvez de Guatemala.
 
 ## Descripción
@@ -33,8 +35,8 @@ Desarrollar una aplicación web por capas (React → ASP.NET Core Web API → EF
 | API meteorológica | OpenWeather |
 | Hardware | ESP32 |
 | Control de versiones | Git, GitHub |
-| Contenedores | Docker *(fase posterior)* |
-| CI/CD | GitHub Actions *(fase posterior)* |
+| Contenedores | Docker y Docker Compose (Nginx para el frontend) |
+| CI/CD | GitHub Actions (CI + publicación de imágenes en GHCR) y Dependabot |
 
 Detalle en [`docs/fase-1/06-tecnologias.md`](docs/fase-1/06-tecnologias.md).
 
@@ -61,32 +63,73 @@ ClimaPlus/
 │   ├── migrations/        # Migraciones de EF Core (Fase 2)
 │   └── scripts/           # Scripts auxiliares de base de datos
 ├── hardware/
-│   └── esp32/             # Firmware del ESP32 (fase posterior)
+│   └── esp32/             # Firmware del ESP32 y simulación en Wokwi
 ├── docs/
 │   ├── arquitectura/      # Diagrama de arquitectura (.puml + .png)
 │   ├── base-datos/        # Modelo relacional y diccionario de datos
 │   ├── mockups/           # Exportaciones de Figma
+│   ├── api/               # Contratos de la API y matriz de trazabilidad
+│   ├── seguridad/         # Análisis OWASP Top 10 e informe de pruebas
+│   ├── despliegue/        # Guía de Docker, CI/CD y despliegue
 │   └── fase-1/            # Documentación de planeación y diseño
 ├── .github/
-│   └── workflows/         # GitHub Actions (fase posterior)
+│   ├── workflows/         # ci.yml (pruebas) y cd.yml (imágenes en GHCR)
+│   └── dependabot.yml
+├── docker-compose.yml     # Base de datos + API + frontend
+├── docker-compose.prod.yml
+├── .env.example           # Variables de Docker Compose (copiar como .env)
 ├── README.md
 └── .gitignore
 ```
 
 ## Estado del proyecto
 
-**FASE 1 – Planeación y diseño inicial**
+| Fase | Contenido | Estado |
+|---|---|---|
+| 1 | Planeación, arquitectura, modelo de datos y mockups | Terminada |
+| 2–6 | Backend (JWT, clima, favoritos, historial, alertas), frontend React e integración por roles | Terminadas |
+| 7 | Dispositivos ESP32: API Key, lecturas, alertas físicas, M11/M12 y firmware | Terminada (falta la prueba con la placa real) |
+| 8 | Seguridad OWASP Top 10 y pruebas | Terminada ([`docs/seguridad/owasp-top10.md`](docs/seguridad/owasp-top10.md)) |
+| 9 | Docker, GitHub Actions y despliegue | Terminada ([`docs/despliegue/guia-despliegue.md`](docs/despliegue/guia-despliegue.md)) |
+| 10 | Entrega: evidencias, documentación final y presentación | En curso |
 
-| Elemento | Estado |
-|---|---|
-| Arquitectura | Terminada |
-| Modelo relacional y diccionario de datos | Terminados (v1.0) |
-| Documentación de Fase 1 | Organizada |
-| Mockups en Figma | Pendientes |
-| Repositorio en GitHub | Pendiente |
-
-Checklist completo: [`docs/fase-1/10-checklist-fase1.md`](docs/fase-1/10-checklist-fase1.md).
+Pruebas: 509 xUnit (backend, con PostgreSQL real), 105 Vitest (frontend) y 71 SQL (base de datos).
 
 ## Ejecución
 
-Todavía no implementada. Las instrucciones de instalación y ejecución se agregarán cuando exista código del frontend y del backend.
+### Opción 1: todo con Docker (recomendada para probar)
+
+Requisito: Docker Desktop.
+
+```bash
+cp .env.example .env          # cambia las claves dentro de .env
+docker compose up -d --build
+```
+
+| Servicio | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| API | http://localhost:8080 (salud: http://localhost:8080/health) |
+| ESP32 | `http://<IP de la PC>:8080/api/lecturas` |
+
+Detalles, variables y despliegue en un servidor: [`docs/despliegue/guia-despliegue.md`](docs/despliegue/guia-despliegue.md).
+
+### Opción 2: desarrollo local
+
+Requisitos: .NET 8 SDK, Node.js 22 y PostgreSQL 16.
+
+```bash
+# API en http://localhost:5208 (configura antes los User Secrets: ConnectionStrings:ClimaPlusDb, Jwt:Clave, OpenWeather:ApiKey)
+dotnet run --project backend/ClimaPlus.Api --launch-profile http
+
+# Frontend en http://localhost:5173
+cd frontend && npm install && npm run dev
+```
+
+### Pruebas
+
+```bash
+export CLIMAPLUS_TEST_DB="Host=localhost;Port=5432;Database=climaplus_test;Username=postgres;Password=TU_CLAVE"
+dotnet test backend/ClimaPlus.sln
+cd frontend && npm test && npm run lint && npm run build
+```
