@@ -143,6 +143,12 @@ Invoke-RestMethod -Method Post -Uri http://localhost:5208/api/lecturas `
 
 También se puede desde Swagger: **Authorize** → `DeviceKey` → pegar la clave → `POST /api/lecturas`.
 
+## Firmware
+
+El firmware del ESP32 está en [`hardware/esp32`](../../hardware/esp32/README.md): materiales, conexiones,
+configuración de `secrets.h` (WiFi, `API_URL` y `DEVICE_KEY`), cómo exponer la API en la red local y simulación en
+Wokwi. Envía una lectura por minuto y usa `alertasGeneradas` para el LED rojo y el buzzer.
+
 ## Decisiones de esta fase
 
 | ID | Decisión |
