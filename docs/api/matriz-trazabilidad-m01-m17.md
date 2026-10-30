@@ -5,6 +5,8 @@
 
 **Fase 8 (seguridad):** análisis OWASP Top 10 y controles nuevos en [`../seguridad/owasp-top10.md`](../seguridad/owasp-top10.md); resultados en [`../seguridad/informe-pruebas-fase8.md`](../seguridad/informe-pruebas-fase8.md) (507 xUnit, 105 Vitest y 71 SQL).
 
+**Fase 9 (DevOps):** Docker, GitHub Actions y despliegue en [`../despliegue/guia-despliegue.md`](../despliegue/guia-despliegue.md). Se agregó `GET /health` (509 pruebas xUnit).
+
 ## Leyenda de estados
 
 | Estado | Significado |

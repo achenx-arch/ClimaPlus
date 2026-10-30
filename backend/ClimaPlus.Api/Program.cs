@@ -66,6 +66,9 @@ builder.Services.AddScoped<IMotorAlertas, MotorAlertas>();
 builder.Services.AddScoped<DispositivoService>();
 builder.Services.AddScoped<LecturaService>();
 
+// Fase 9: estado de la API y de la base de datos para Docker, CI y monitoreo (GET /health).
+builder.Services.AddHealthChecks().AddCheck<VerificacionBaseDatos>("postgresql");
+
 // Errores de validación con nombres de campo en camelCase (los mismos del JSON).
 builder.Services.AddControllers(opciones =>
     opciones.ModelMetadataDetailsProviders.Add(new SystemTextJsonValidationMetadataProvider()));
@@ -140,6 +143,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Público: solo responde Healthy/Unhealthy (503), sin detalles.
+app.MapHealthChecks("/health").AllowAnonymous();
 
 // Administrador inicial (D-06): solo si AdminInicial está en User Secrets y no existe otro.
 await AdminSeeder.EjecutarAsync(app.Services);
