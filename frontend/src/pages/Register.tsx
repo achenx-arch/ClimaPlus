@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./Register.css";
 import { registrarUsuario } from "../services/authService";
+import { ApiError, mensajeDeError } from "../services/apiClient";
+import EnlaceVolver from "../components/EnlaceVolver";
 
 export default function Register() {
   const [name, setName] = useState("");
@@ -12,7 +14,9 @@ export default function Register() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(""); 
+  const [success, setSuccess] = useState("");
+  const [erroresCampo, setErroresCampo] = useState<Record<string, string>>({});
+  const navigate = useNavigate();
 
 const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
   e.preventDefault();
@@ -21,6 +25,7 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
 
   setError("");
   setSuccess("");
+  setErroresCampo({});
 
   const nombreLimpio = name.trim();
   const correoLimpio = email.trim();
@@ -87,17 +92,19 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     setPassword("");
     setConfirmPassword("");
 
+    // M03 → M02 con el mensaje "Cuenta creada, inicia sesión" (contrato-auth-perfil.md).
+    navigate("/login", { state: { mensaje: "Cuenta creada, inicia sesión." } });
+
   } catch (error) {
-    if (error instanceof TypeError) {
-      setError(
-        "No se pudo conectar con el servidor. Verifica que el backend esté disponible."
-      );
+    if (error instanceof ApiError && Object.keys(error.errores).length > 0) {
+      const porCampo: Record<string, string> = {};
+      for (const [campo, mensajes] of Object.entries(error.errores)) {
+        porCampo[campo] = mensajes[0];
+      }
+      setErroresCampo(porCampo);
+      setError(error.message);
     } else {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "No se pudo completar el registro."
-      );
+      setError(mensajeDeError(error, "No se pudo completar el registro."));
     }
   } finally {
     setLoading(false);
@@ -146,6 +153,8 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         </div>
 
         <div className="register-form-container">
+          <EnlaceVolver to="/">Volver al Inicio</EnlaceVolver>
+
           <h2>Crea tu cuenta</h2>
 
           <p className="register-subtitle">
@@ -168,6 +177,9 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
+              {erroresCampo.nombre && (
+                <small className="text-danger d-block mt-1">{erroresCampo.nombre}</small>
+              )}
             </div>
 
             <div className="register-field">
@@ -185,6 +197,9 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
+              {erroresCampo.correo && (
+                <small className="text-danger d-block mt-1">{erroresCampo.correo}</small>
+              )}
             </div>
 
             <div className="register-field">
@@ -219,6 +234,9 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   ></i>
                 </button>
               </div>
+              {erroresCampo.password && (
+                <small className="text-danger d-block mt-1">{erroresCampo.password}</small>
+              )}
             </div>
 
             <div className="register-field">
@@ -252,16 +270,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
               </span>
             </label>
 
-          {success && (
-  <div className="alert alert-success" role="status">
-    {success}
-    <div className="mt-2">
-      <Link to="/login" className="alert-link">
-        Ir a iniciar sesión
-      </Link>
-    </div>
-  </div>
-)}
 {error && (
   <div className="register-error" role="alert">
     {error}
@@ -298,4 +306,4 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
       </section>
     </main>
   );
-}
+}

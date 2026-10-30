@@ -1,83 +1,41 @@
+import { solicitar } from "./apiClient";
 import type {
+  ActualizarPerfilRequest,
+  CambiarPasswordRequest,
   LoginRequest,
   LoginResponse,
   RegistroRequest,
   Usuario,
-} from "../types/auth";
+} from "../types/api";
 
-// URL del backend. La configuraremos cuando confirmemos su puerto.
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+// contrato-auth-perfil.md
 
-async function procesarRespuesta<T>(
-  respuesta: Response
-): Promise<T> {
-  if (!respuesta.ok) {
-    let mensaje = "Ocurrió un error al comunicarse con el servidor.";
-
-    try {
-      const datos = await respuesta.json();
-
-      mensaje =
-        datos.detail ||
-        datos.title ||
-        datos.message ||
-        mensaje;
-
-      if (datos.errors) {
-        const errores = Object.values(datos.errors).flat();
-        if (errores.length > 0) {
-          mensaje = errores.join(" ");
-        }
-      }
-    } catch {
-      // Mantener el mensaje general si no hay JSON.
-    }
-
-    throw new Error(mensaje);
-  }
-
-  return respuesta.json() as Promise<T>;
+/** POST /api/auth/login (público). */
+export function iniciarSesion(datos: LoginRequest): Promise<LoginResponse> {
+  return solicitar<LoginResponse>("/api/auth/login", { metodo: "POST", cuerpo: datos, autenticacion: "ninguna" });
 }
 
-// POST /api/auth/login
-export async function iniciarSesion(
-  datos: LoginRequest
-): Promise<LoginResponse> {
-  const respuesta = await fetch(`${API_URL}/api/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(datos),
-  });
-
-  return procesarRespuesta<LoginResponse>(respuesta);
+/** POST /api/auth/register (público). 201 con el Usuario; no devuelve token. */
+export function registrarUsuario(datos: RegistroRequest): Promise<Usuario> {
+  return solicitar<Usuario>("/api/auth/register", { metodo: "POST", cuerpo: datos, autenticacion: "ninguna" });
 }
 
-// POST /api/auth/register
-export async function registrarUsuario(
-  datos: RegistroRequest
-): Promise<Usuario> {
-  const respuesta = await fetch(`${API_URL}/api/auth/register`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(datos),
-  });
-
-  return procesarRespuesta<Usuario>(respuesta);
+/** GET /api/auth/me con un token concreto (restauración de sesión). */
+export function obtenerUsuarioActual(signal?: AbortSignal): Promise<Usuario> {
+  return solicitar<Usuario>("/api/auth/me", { signal });
 }
 
-// GET /api/auth/me
-export async function obtenerUsuarioActual(
-  token: string
-): Promise<Usuario> {
-  const respuesta = await fetch(`${API_URL}/api/auth/me`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+/** GET /api/usuarios/me (M16, M17). */
+export function obtenerPerfil(signal?: AbortSignal): Promise<Usuario> {
+  return solicitar<Usuario>("/api/usuarios/me", { signal });
+}
 
-  return procesarRespuesta<Usuario>(respuesta);
+/** PUT /api/usuarios/me: siempre nombre y correo. */
+export function actualizarPerfil(datos: ActualizarPerfilRequest): Promise<Usuario> {
+  return solicitar<Usuario>("/api/usuarios/me", { metodo: "PUT", cuerpo: datos });
+}
+
+/** PUT /api/usuarios/me/password: 204 sin cuerpo. */
+export function cambiarPassword(datos: CambiarPasswordRequest): Promise<void> {
+  return solicitar<void>("/api/usuarios/me/password", { metodo: "PUT", cuerpo: datos });
 }

@@ -1,190 +1,145 @@
-import { useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import "./CurrentWeather.css";
+import ResultadosUbicacion from "../components/ResultadosUbicacion";
+import { claveSesion, useAuth } from "../context/auth";
+import { useNotificaciones } from "../context/notificaciones";
+import { validarBusqueda } from "../hooks/useBusquedaUbicaciones";
+import { useConsulta } from "../hooks/useConsulta";
+import { ApiError, mensajeDeError } from "../services/apiClient";
+import { buscarUbicaciones, obtenerClimaActual } from "../services/climaService";
+import { agregarFavorito, listarFavoritos } from "../services/favoritosService";
+import type { Ubicacion } from "../types/api";
+import {
+  capitalizar,
+  direccionViento,
+  grados,
+  humedad,
+  iconoCondicion,
+  lugar,
+  nivelHumedad,
+  numero,
+  viento,
+} from "../utils/clima";
+import { hora, horaEnUbicacion } from "../utils/fechas";
+import EnlaceVolver from "../components/EnlaceVolver";
 
-// Datos temporales hasta conectar la API meteorológica
-const climasDemo = [
-  {
-    nombre: "Ciudad de Guatemala",
-    ubicacion: "Guatemala, GT",
-    temperatura: 22,
-    condicion: "Parcialmente nublado",
-    icono: "bi-cloud-sun",
-    maxima: 25,
-    minima: 16,
-    sensacion: 23,
-    humedad: 74,
-    viento: 12,
-    direccion: "Noreste",
-    presion: "1,018 hPa",
-    uv: "5 · Moderado",
-    atardecer: "6:21 p. m.",
-  },
-  {
-    nombre: "Antigua Guatemala",
-    ubicacion: "Sacatepéquez, GT",
-    temperatura: 20,
-    condicion: "Lluvia ligera",
-    icono: "bi-cloud-drizzle",
-    maxima: 23,
-    minima: 15,
-    sensacion: 19,
-    humedad: 81,
-    viento: 8,
-    direccion: "Sureste",
-    presion: "1,016 hPa",
-    uv: "3 · Moderado",
-    atardecer: "6:18 p. m.",
-  },
-  {
-    nombre: "Quetzaltenango",
-    ubicacion: "Quetzaltenango, GT",
-    temperatura: 16,
-    condicion: "Nublado",
-    icono: "bi-cloud",
-    maxima: 19,
-    minima: 10,
-    sensacion: 15,
-    humedad: 78,
-    viento: 10,
-    direccion: "Norte",
-    presion: "1,020 hPa",
-    uv: "4 · Moderado",
-    atardecer: "6:15 p. m.",
-  },
-];
+/** idUbicacion válido de la URL (contrato: entero ≥ 1), o null. */
+function leerIdUbicacion(valor: string | null): number | null {
+  const id = Number(valor);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
 
+// M04 – Clima actual. GET /api/clima/ubicaciones para buscar y GET /api/clima/actual?idUbicacion=
+// para el resultado. Con sesión la consulta entra al historial y puede generar alertas
+// (alertasGeneradas → toast "Nueva alerta: …").
 export default function CurrentWeather() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { estado, usuario } = useAuth();
+  const { notificarAlertasGeneradas, avisar } = useNotificaciones();
+  const autenticado = estado === "autenticado";
 
-  const ciudadURL = searchParams.get("ciudad") || "";
+  const idUbicacion = leerIdUbicacion(searchParams.get("idUbicacion"));
+  // "q" llega desde el buscador de M01; "ciudad" se mantiene por compatibilidad con enlaces anteriores.
+  const busquedaURL = searchParams.get("q") ?? searchParams.get("ciudad") ?? "";
 
-  const [city, setCity] = useState(ciudadURL);
+  const [city, setCity] = useState(busquedaURL);
+  const [guardandoFavorito, setGuardandoFavorito] = useState(false);
 
-  const climaSeleccionado =
-    climasDemo.find(
-      (clima) =>
-        clima.nombre.toLocaleLowerCase("es") ===
-        ciudadURL.trim().toLocaleLowerCase("es")
-    ) || climasDemo[0];
-    
-    const agregarFavorito = () => {
-  const ciudadEncontrada = climasDemo.find(
-    (clima) =>
-      clima.nombre.toLocaleLowerCase("es") ===
-      ciudadURL.trim().toLocaleLowerCase("es")
-  );
+  // Se espera a validar la sesión restaurada para que la consulta quede (o no) en el historial correcto.
+  const claveClima = idUbicacion !== null && estado !== "cargando" ? `actual:${idUbicacion}:${claveSesion(usuario)}` : null;
+  const clima = useConsulta(claveClima, () => obtenerClimaActual(idUbicacion!, claveSesion(usuario)));
+  const datos = clima.datos;
 
-  if (!ciudadEncontrada) {
-    alert("Por ahora solo puedes guardar ciudades disponibles en la demostración.");
-    return;
-  }
+  const favoritos = useConsulta(autenticado ? `favoritos:${usuario?.idUsuario}` : null, (signal) => listarFavoritos(signal));
+  const esFavorito =
+    datos !== undefined &&
+    (favoritos.datos ?? []).some((favorito) => favorito.ubicacion.idUbicacion === datos.ubicacion.idUbicacion);
 
-  const favoritosGuardados = localStorage.getItem("climaplus_favoritos");
+  // Toast por cada alerta nueva; [] no muestra nada. Se deduplica por idAlerta.
+  const alRecibirAlertas = useEffectEvent(() => notificarAlertasGeneradas(datos?.alertasGeneradas));
+  useEffect(() => {
+    if (datos) alRecibirAlertas();
+  }, [datos]);
 
-  let favoritos = [];
+  // Búsqueda declarativa: el texto viaja en ?q= (también desde M01) y la ubicación elegida en ?idUbicacion=.
+  const errorBusquedaURL = idUbicacion === null && busquedaURL.trim() ? validarBusqueda(busquedaURL) : null;
+  const claveBusqueda =
+    idUbicacion === null && busquedaURL.trim() && !errorBusquedaURL ? `ubicaciones:${busquedaURL.trim()}` : null;
+  const busqueda = useConsulta(claveBusqueda, (signal) => buscarUbicaciones(busquedaURL, signal));
+  const resultados = busqueda.datos;
+  const errorBusqueda =
+    errorBusquedaURL ??
+    (busqueda.error
+      ? mensajeDeError(busqueda.error, "No se pudo buscar la ubicación.")
+      : resultados && resultados.length === 0
+        ? "No encontramos esa ubicación. Revisa el nombre e inténtalo de nuevo."
+        : "");
 
-  try {
-    const datos = favoritosGuardados
-      ? JSON.parse(favoritosGuardados)
-      : [];
-
-    favoritos = Array.isArray(datos) ? datos : [];
-  } catch {
-    favoritos = [];
-  }
-
-  const yaExiste = favoritos.some(
-    (favorito: { nombre: string }) =>
-      favorito.nombre === ciudadEncontrada.nombre
-  );
-
-  if (yaExiste) {
-    alert("Esta ciudad ya está guardada en tus favoritos.");
-    return;
-  }
-
-  const nuevoFavorito = {
-    nombre: ciudadEncontrada.nombre,
-    ubicacion: ciudadEncontrada.ubicacion,
-    temperatura: ciudadEncontrada.temperatura,
-    condicion: ciudadEncontrada.condicion,
-    icono: ciudadEncontrada.icono,
-    humedad: ciudadEncontrada.humedad,
-    viento: ciudadEncontrada.viento,
-    fecha: new Date().toLocaleString("es-GT"),
+  const seleccionar = (ubicacion: Ubicacion) => {
+    setCity(ubicacion.nombre);
+    setSearchParams({ idUbicacion: String(ubicacion.idUbicacion) });
   };
 
-  localStorage.setItem(
-    "climaplus_favoritos",
-    JSON.stringify([...favoritos, nuevoFavorito])
-  );
-
-  alert(`${ciudadEncontrada.nombre} se agregó a tus favoritos.`);
-};
-const handleSearch = (e: FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-
-  const ciudadBuscada = city.trim();
-
-  if (!ciudadBuscada) {
-    return;
-  }
-
-  const climaEncontrado = climasDemo.find(
-    (clima) =>
-      clima.nombre.toLocaleLowerCase("es") ===
-      ciudadBuscada.toLocaleLowerCase("es")
-  );
-
-  if (!climaEncontrado) {
-    alert("Por ahora esta ciudad no está disponible en la demostración.");
-    return;
-  }
-
-  setSearchParams({ ciudad: climaEncontrado.nombre });
-
-  const historialGuardado = localStorage.getItem("climaplus_historial");
-
-  let historial = [];
-
-  try {
-    const datos = historialGuardado
-      ? JSON.parse(historialGuardado)
-      : [];
-
-    historial = Array.isArray(datos) ? datos : [];
-  } catch {
-    historial = [];
-  }
-
-  const ahora = new Date();
-
-  const nuevaConsulta = {
-    id: Date.now(),
-    ciudad: climaEncontrado.nombre,
-    ubicacion: climaEncontrado.ubicacion,
-    temperatura: climaEncontrado.temperatura,
-    condicion: climaEncontrado.condicion,
-    icono: climaEncontrado.icono,
-    fecha: ahora.toLocaleDateString("es-GT"),
-    hora: ahora.toLocaleTimeString("es-GT", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+  const handleSearch = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const texto = city.trim();
+    if (!texto) {
+      return;
+    }
+    setSearchParams({ q: texto });
   };
 
-  localStorage.setItem(
-    "climaplus_historial",
-    JSON.stringify([nuevaConsulta, ...historial])
-  );
-};
+  const agregarFavoritoActual = async () => {
+    if (!datos) return;
+
+    if (!autenticado) {
+      navigate("/login", { state: { desde: `${location.pathname}${location.search}` } });
+      return;
+    }
+
+    setGuardandoFavorito(true);
+    try {
+      const nuevo = await agregarFavorito(datos.ubicacion.idUbicacion);
+      favoritos.actualizar((actuales) => [nuevo, ...(actuales ?? [])]);
+      avisar("Ubicación agregada a favoritos");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        favoritos.recargar();
+        avisar("Esta ubicación ya está en tus favoritos.", "info");
+      } else {
+        avisar(mensajeDeError(error, "No se pudo guardar el favorito."), "error");
+      }
+    } finally {
+      setGuardandoFavorito(false);
+    }
+  };
+
+  const errorClima =
+    clima.error instanceof ApiError && clima.error.status === 404
+      ? "La ubicación no existe. Búscala de nuevo."
+      : clima.error
+        ? mensajeDeError(clima.error, "No se pudo consultar el clima.")
+        : "";
+
+  // Un solo resultado: se abre directamente.
+  if (idUbicacion === null && resultados && resultados.length === 1) {
+    return <Navigate to={`/clima?idUbicacion=${resultados[0].idUbicacion}`} replace />;
+  }
 
   return (
     <main className="current-weather-page">
       <div className="current-weather-container">
 
-        <span className="current-weather-label">
+        {autenticado ? (
+          <EnlaceVolver to="/dashboard">Volver a mi dashboard</EnlaceVolver>
+        ) : (
+          <EnlaceVolver to="/">Volver al Inicio</EnlaceVolver>
+        )}
+
+        <span className="current-weather-label d-block">
           CLIMA ACTUAL
         </span>
 
@@ -204,17 +159,27 @@ const handleSearch = (e: FormEvent<HTMLFormElement>) => {
 
           <input
             type="text"
-            placeholder="Ciudad, municipio o código postal"
+            placeholder="Ciudad o municipio"
             aria-label="Buscar ciudad o municipio"
             value={city}
             onChange={(e) => setCity(e.target.value)}
             maxLength={100}
           />
 
-          <button type="submit">
-            Consultar clima
+          <button type="submit" disabled={busqueda.cargando}>
+            {busqueda.cargando ? "Buscando..." : "Consultar clima"}
           </button>
         </form>
+
+        {errorBusqueda && (
+          <div className="alert alert-warning mt-3" role="alert">
+            {errorBusqueda}
+          </div>
+        )}
+
+        {resultados && resultados.length > 1 && (
+          <ResultadosUbicacion resultados={resultados} alElegir={seleccionar} />
+        )}
 
         {/* Contenedor de resultados */}
         <div className="weather-results">
@@ -222,15 +187,38 @@ const handleSearch = (e: FormEvent<HTMLFormElement>) => {
           {/* Tarjeta principal del clima */}
           <div className="weather-main-card">
 
+            {!datos && (
+              <div className="py-4 text-center" role="status">
+                {clima.cargando ? (
+                  <>
+                    <div className="spinner-border mb-3" aria-hidden="true"></div>
+                    <p className="mb-0">Consultando el clima...</p>
+                  </>
+                ) : errorClima ? (
+                  <p className="mb-0" role="alert">
+                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    {errorClima}
+                  </p>
+                ) : (
+                  <p className="mb-0">
+                    <i className="bi bi-search me-2"></i>
+                    Busca una ciudad para ver sus condiciones actuales.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {datos && (
+              <>
             <div className="weather-card-header">
               <div>
                 <h3>
                   <i className="bi bi-geo-alt"></i>
-                  {climaSeleccionado.nombre}
+                  {datos.ubicacion.nombre}
                 </h3>
 
                 <p>
-                  {climaSeleccionado.ubicacion} · Datos de demostración
+                  {lugar(datos.ubicacion)} · Consultado a las {hora(datos.consulta.fechaConsultaUtc)}
                 </p>
               </div>
 
@@ -238,11 +226,20 @@ const handleSearch = (e: FormEvent<HTMLFormElement>) => {
   <button
     type="button"
     className="weather-add-favorite"
-    onClick={agregarFavorito}
-    title="Guardar ciudad en favoritos"
+    onClick={agregarFavoritoActual}
+    disabled={guardandoFavorito || esFavorito}
+    title={
+      autenticado
+        ? "Guardar ciudad en favoritos"
+        : "Inicia sesión para guardar favoritos"
+    }
   >
-    <i className="bi bi-star"></i>
-    Guardar en favoritos
+    <i className={`bi ${esFavorito ? "bi-star-fill" : "bi-star"}`}></i>
+    {!autenticado
+      ? "Inicia sesión para guardar favoritos"
+      : esFavorito
+        ? "En tus favoritos"
+        : "Guardar en favoritos"}
   </button>
 
   <span className="weather-now-badge">
@@ -255,21 +252,21 @@ const handleSearch = (e: FormEvent<HTMLFormElement>) => {
             <div className="weather-card-body">
               <div>
                 <div className="weather-temperature">
-                  {climaSeleccionado.temperatura}°
+                  {grados(datos.temperatura)}
                 </div>
 
                 <h4>
-                  {climaSeleccionado.condicion}
+                  {capitalizar(datos.descripcion)}
                 </h4>
 
                 <p>
-                  Máx. {climaSeleccionado.maxima}° ·
-                  Mín. {climaSeleccionado.minima}°
+                  Máx. {grados(datos.detalle.temperaturaMax)} ·
+                  Mín. {grados(datos.detalle.temperaturaMin)}
                 </p>
               </div>
 
               <div className="weather-condition-icon">
-                <i className={`bi ${climaSeleccionado.icono}`}></i>
+                <i className={`bi ${iconoCondicion(datos.codigoCondicion, datos.detalle.esDeDia)}`}></i>
               </div>
             </div>
 
@@ -278,23 +275,25 @@ const handleSearch = (e: FormEvent<HTMLFormElement>) => {
 
               <div className="weather-stat">
                 <span>SENSACIÓN</span>
-                <strong>{climaSeleccionado.sensacion}°</strong>
+                <strong>{grados(datos.sensacionTermica)}</strong>
                 <small>Térmica</small>
               </div>
 
               <div className="weather-stat">
                 <span>HUMEDAD</span>
-                <strong>{climaSeleccionado.humedad}%</strong>
-                <small>Moderada</small>
+                <strong>{humedad(datos.humedad)}</strong>
+                <small>{nivelHumedad(datos.humedad)}</small>
               </div>
 
               <div className="weather-stat">
                 <span>VIENTO</span>
-                <strong>{climaSeleccionado.viento} km/h</strong>
-                <small>{climaSeleccionado.direccion}</small>
+                <strong>{viento(datos.velocidadViento)}</strong>
+                <small>{direccionViento(datos.detalle.direccionVientoGrados)}</small>
               </div>
 
             </div>
+              </>
+            )}
           </div>
 
           {/* Panel lateral */}
@@ -305,22 +304,26 @@ const handleSearch = (e: FormEvent<HTMLFormElement>) => {
 
               <div className="weather-detail-row">
                 <span>Sensación térmica</span>
-                <strong>{climaSeleccionado.sensacion}°</strong>
+                <strong>{datos ? `${numero(datos.sensacionTermica)} °C` : "—"}</strong>
               </div>
 
               <div className="weather-detail-row">
                 <span>Presión atmosférica</span>
-                <strong>{climaSeleccionado.presion}</strong>
+                <strong>
+                  {datos?.detalle.presionHpa != null
+                    ? `${datos.detalle.presionHpa.toLocaleString("es-GT")} hPa`
+                    : "—"}
+                </strong>
               </div>
 
               <div className="weather-detail-row">
-                <span>Índice UV</span>
-                <strong>{climaSeleccionado.uv}</strong>
+                <span>Amanecer</span>
+                <strong>{datos ? horaEnUbicacion(datos.detalle.amanecerUtc, datos.detalle.zonaHorariaSegundos) : "—"}</strong>
               </div>
 
               <div className="weather-detail-row">
                 <span>Atardecer</span>
-                <strong>{climaSeleccionado.atardecer}</strong>
+                <strong>{datos ? horaEnUbicacion(datos.detalle.atardecerUtc, datos.detalle.zonaHorariaSegundos) : "—"}</strong>
               </div>
             </div>
 
@@ -332,13 +335,13 @@ const handleSearch = (e: FormEvent<HTMLFormElement>) => {
                 Revisa los cambios de temperatura y probabilidad de lluvia.
               </p>
 
-              <a
-                href="/pronostico"
+              <Link
+                to={datos ? `/pronostico?idUbicacion=${datos.ubicacion.idUbicacion}` : "/pronostico"}
                 className="weather-forecast-button"
               >
                 Ver pronóstico
                 <i className="bi bi-chevron-right"></i>
-              </a>
+              </Link>
             </div>
 
           </aside>

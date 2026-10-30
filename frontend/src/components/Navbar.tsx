@@ -1,35 +1,15 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
+import { useAuth } from "../context/auth";
+import { useNotificaciones } from "../context/notificaciones";
 
 function Navbar() {
-  const location = useLocation();
+  const { estado, usuario, esAdministrador, cerrarSesion } = useAuth();
+  const { nuevas } = useNotificaciones();
 
-  // Identificar las pantallas administrativas
-  const esAdministrador = location.pathname.startsWith("/admin");
+  // Sesión real (contrato-auth-perfil.md): nombre del token validado y campana con alertas NUEVA.
+  const conSesion = estado === "autenticado" && usuario !== null;
 
-  // Identificar las pantallas privadas del usuario
-  const rutasUsuario = [
-    "/dashboard",
-    "/favoritos",
-    "/historial",
-    "/alertas",
-    "/configuracion-alertas",
-    "/dispositivos",
-    "/perfil",
-  ];
-
-  const esUsuario =
-    rutasUsuario.some(
-      (ruta) =>
-        location.pathname === ruta ||
-        location.pathname.startsWith(`${ruta}/`)
-    );
-
-  // Temporal: después se obtendrá de la sesión real
-  const sesionDemostracion = esAdministrador || esUsuario;
-
-  const nombreUsuario = esAdministrador
-    ? "Administrador"
-    : "Amilcar Chen";
+  const nombreUsuario = usuario?.nombre ?? "";
 
   const rutaPerfil = esAdministrador
     ? "/admin/perfil"
@@ -93,20 +73,33 @@ function Navbar() {
 
           <div className="d-flex gap-3 align-items-center">
 
-            {sesionDemostracion ? (
+            {conSesion ? (
               <>
                 {/* Notificaciones */}
                 <NavLink
                   to="/alertas"
                   className="text-decoration-none position-relative"
                   title="Notificaciones"
-                  aria-label="Ver notificaciones"
+                  aria-label={
+                    nuevas > 0
+                      ? `Ver notificaciones: ${nuevas} alertas nuevas`
+                      : "Ver notificaciones"
+                  }
                   style={{
                     color: "#075d87",
                     fontSize: "20px",
                   }}
                 >
                   <i className="bi bi-bell"></i>
+                  {nuevas > 0 && (
+                    <span
+                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                      style={{ fontSize: "10px" }}
+                      data-testid="contador-alertas"
+                    >
+                      {nuevas > 99 ? "99+" : nuevas}
+                    </span>
+                  )}
                 </NavLink>
 
                 {/* Menú del usuario */}
@@ -151,17 +144,34 @@ function Navbar() {
                     </li>
 
                     <li>
+                      <NavLink className="dropdown-item" to="/dashboard">
+                        <i className="bi bi-grid me-2"></i>
+                        Mi espacio
+                      </NavLink>
+                    </li>
+
+                    {esAdministrador && (
+                      <li>
+                        <NavLink className="dropdown-item" to="/admin">
+                          <i className="bi bi-speedometer2 me-2"></i>
+                          Panel administrativo
+                        </NavLink>
+                      </li>
+                    )}
+
+                    <li>
                       <hr className="dropdown-divider" />
                     </li>
 
                     <li>
-                      <NavLink
+                      <button
+                        type="button"
                         className="dropdown-item"
-                        to="/login"
+                        onClick={cerrarSesion}
                       >
                         <i className="bi bi-box-arrow-right me-2"></i>
                         Cerrar sesión
-                      </NavLink>
+                      </button>
                     </li>
                   </ul>
 
@@ -192,4 +202,4 @@ function Navbar() {
   );
 }
 
-export default Navbar;
+export default Navbar;
