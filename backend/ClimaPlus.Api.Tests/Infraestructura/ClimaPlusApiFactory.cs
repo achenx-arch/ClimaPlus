@@ -33,6 +33,10 @@ public class ClimaPlusApiFactory : WebApplicationFactory<Program>
 
     protected virtual int LimiteDispositivos => 1000;
 
+    protected virtual int LimiteGeneral => 100_000;
+
+    protected virtual int MaxIntentosLogin => 5;
+
     /// <summary>"" simula que la clave no está configurada.</summary>
     protected virtual string ClaveOpenWeather => ClaveOpenWeatherPruebas;
 
@@ -58,6 +62,9 @@ public class ClimaPlusApiFactory : WebApplicationFactory<Program>
                 ["RateLimiting:Clima:VentanaSegundos"] = "60",
                 ["RateLimiting:Dispositivos:PermitLimit"] = LimiteDispositivos.ToString(CultureInfo.InvariantCulture),
                 ["RateLimiting:Dispositivos:VentanaSegundos"] = "60",
+                ["RateLimiting:General:PermitLimit"] = LimiteGeneral.ToString(CultureInfo.InvariantCulture),
+                ["RateLimiting:General:VentanaSegundos"] = "60",
+                ["Seguridad:IntentosLogin:MaxFallidos"] = MaxIntentosLogin.ToString(CultureInfo.InvariantCulture),
                 ["OpenWeather:ApiKey"] = ClaveOpenWeather,
                 // Dominio reservado .invalid: aunque fallara el simulador, nunca se llegaría a OpenWeather real.
                 ["OpenWeather:BaseUrl"] = "https://api.openweather.pruebas.invalid",
@@ -102,6 +109,14 @@ public sealed class ClimaPlusApiFactoryLimiteBajo : ClimaPlusApiFactory
     protected override int LimiteClima => Limite;
 
     protected override int LimiteDispositivos => Limite;
+}
+
+/// <summary>Fase 8: límite general de 10 peticiones por minuto, para probar que también protege las rutas con sesión.</summary>
+public sealed class ClimaPlusApiFactoryLimiteGeneral : ClimaPlusApiFactory
+{
+    public const int Limite = 10;
+
+    protected override int LimiteGeneral => Limite;
 }
 
 /// <summary>API sin OpenWeather:ApiKey: las rutas de clima deben responder 503 sin llamar al proveedor.</summary>
