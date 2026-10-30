@@ -3,6 +3,8 @@
 **Fecha:** 2026-10-29 (actualizada con el backend de dispositivos y lecturas, Fase 7) · **Rama:** `feature/backend` · **Responsable:** Integrante 2 (backend)
 **Fuentes:** `docs/fase-1/08-mockups.md` (M01–M15), `docs/enmiendas/E-01-perfil-usuario-m16-m17.md` (M16–M17), requisitos RF-01 a RF-30 de la auditoría del 2026-10-25, RF-31 a RF-33 de E-01, y el código actual de `backend/ClimaPlus.Api/Controllers`.
 
+**Fase 8 (seguridad):** análisis OWASP Top 10 y controles nuevos en [`../seguridad/owasp-top10.md`](../seguridad/owasp-top10.md); resultados en [`../seguridad/informe-pruebas-fase8.md`](../seguridad/informe-pruebas-fase8.md) (507 xUnit, 105 Vitest y 71 SQL).
+
 ## Leyenda de estados
 
 | Estado | Significado |
