@@ -5,7 +5,7 @@
 #  Construir:  docker build -t climaplus-api ./backend
 # =====================================================================
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Primero solo el .csproj: la restauración queda en caché mientras no cambien los paquetes.
