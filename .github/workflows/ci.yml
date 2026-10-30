@@ -1,0 +1,213 @@
+# =====================================================================
+#  ClimaPlus – Integración continua (Fase 9)
+#  En cada Pull Request y en cada push a main:
+#    backend     → compila, 509+ pruebas xUnit (con PostgreSQL real) y revisa paquetes NuGet vulnerables
+#    base-datos  → aplica las migraciones y ejecuta las 71 pruebas SQL
+#    frontend    → lint, pruebas Vitest, build y npm audit
+#    docker      → construye las imágenes, levanta todo con Docker Compose y hace una prueba de humo
+# =====================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (.NET 8 + PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: climaplus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      # Base aislada que termina en _test (las pruebas se niegan a usar otra).
+      CLIMAPLUS_TEST_DB: Host=localhost;Port=5432;Database=climaplus_test;Username=postgres;Password=postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restaurar paquetes
+        run: dotnet restore backend/ClimaPlus.sln
+
+      - name: Compilar
+        run: dotnet build backend/ClimaPlus.sln -c Release --no-restore
+
+      - name: Pruebas xUnit
+        run: >-
+          dotnet test backend/ClimaPlus.sln -c Release --no-build
+          --logger "trx;LogFileName=resultados-backend.trx"
+          --results-directory TestResults
+
+      - name: Ninguna prueba omitida (las de PostgreSQL deben ejecutarse)
+        run: |
+          omitidas=$(grep -o 'outcome="NotExecuted"' TestResults/resultados-backend.trx | wc -l)
+          echo "Pruebas omitidas: $omitidas"
+          test "$omitidas" -eq 0
+
+      - name: Paquetes NuGet vulnerables (OWASP A06)
+        run: |
+          dotnet list backend/ClimaPlus.sln package --vulnerable --include-transitive | tee vulnerables.txt
+          if grep -q "has the following vulnerable packages" vulnerables.txt; then
+            echo "::error::Hay paquetes NuGet con vulnerabilidades conocidas."
+            exit 1
+          fi
+
+      - name: Guardar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-backend
+          path: TestResults/
+
+  base-datos:
+    name: Base de datos (migraciones + 71 pruebas SQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: climaplus_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: climaplus_ci_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Aplicar migraciones 001 a 003
+        run: |
+          for f in database/migrations/*.sql; do   # el glob ya sale en orden: 001, 002, 003
+            echo "Aplicando $f"
+            psql -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Pruebas de integridad y CRUD (01 a 08)
+        run: |
+          for f in database/scripts/pruebas/0*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$f" 2>&1 | tee -a salida-sql.txt
+          done
+          aprobadas=$(grep -c "PASS" salida-sql.txt)
+          echo "Pruebas SQL aprobadas: $aprobadas"
+          if grep -q "FAIL" salida-sql.txt; then echo "::error::Hay pruebas SQL fallidas."; exit 1; fi
+          test "$aprobadas" -ge 71
+
+      - name: Pruebas E-02/E-03 (los casos 3 a 7 deben fallar con su restricción)
+        run: |
+          psql -f database/scripts/pruebas/E02_E03_consulta_clima.sql > salida-e02.txt 2>&1 || true
+          cat salida-e02.txt
+          for r in ck_consulta_clima_detalle_pronostico ck_consulta_clima_detalle_objeto ck_consulta_clima_humedad ck_consulta_clima_mediciones_tipo fk_consulta_clima_usuario; do
+            grep -q "$r" salida-e02.txt || { echo "::error::No se rechazó con $r"; exit 1; }
+          done
+
+  frontend:
+    name: Frontend (lint, Vitest, build, npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci --no-fund
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      - name: Dependencias npm vulnerables (OWASP A06)
+        run: npm audit --audit-level=high
+
+  docker:
+    name: Docker Compose (imágenes + prueba de humo)
+    needs: [backend, base-datos, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Crear .env con secretos de un solo uso
+        run: |
+          cp .env.example .env
+          sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" .env
+          sed -i "s|^JWT_CLAVE=.*|JWT_CLAVE=$(openssl rand -base64 48 | tr -d '\n')|" .env
+
+      - name: Construir imágenes
+        run: docker compose build
+
+      - name: Levantar base de datos, API y frontend
+        run: docker compose up -d
+
+      - name: Esperar a que la API esté sana
+        run: |
+          for _ in $(seq 1 40); do
+            if curl -fsS http://localhost:8080/health; then echo; exit 0; fi
+            sleep 3
+          done
+          echo "::error::La API no respondió en /health"
+          exit 1
+
+      - name: Prueba de humo
+        run: |
+          set -e
+          # Registro e inicio de sesión contra PostgreSQL inicializado con las migraciones.
+          curl -fsS -X POST http://localhost:8080/api/auth/register -H "Content-Type: application/json" \
+            -d '{"nombre":"Prueba CI","correo":"ci@ejemplo.com","password":"ClimaPlus2026"}' -o /dev/null
+          curl -fsS -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/json" \
+            -d '{"correo":"ci@ejemplo.com","password":"ClimaPlus2026"}' | grep -q '"token"'
+          # Cabeceras de seguridad de la API y del frontend; rutas de React servidas por Nginx.
+          curl -fsSI http://localhost:8080/health | grep -qi "x-frame-options: DENY"
+          curl -fsSI http://localhost:3000/dashboard | grep -qi "x-frame-options: DENY"
+          curl -fsS http://localhost:3000/ | grep -qi "Content-Security-Policy"
+          echo "Prueba de humo correcta"
+
+      - name: Registros si algo falló
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Apagar
+        if: always()
+        run: docker compose down -v
