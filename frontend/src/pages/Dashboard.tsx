@@ -8,6 +8,7 @@ import { mensajeDeError } from "../services/apiClient";
 import { listarAlertas } from "../services/alertasService";
 import { obtenerClimaActual } from "../services/climaService";
 import { listarFavoritos } from "../services/favoritosService";
+import { listarDispositivos } from "../services/dispositivosService";
 import type { ClimaActual } from "../types/api";
 import {
   CLASE_TIPO_ALERTA,
@@ -35,8 +36,11 @@ export default function Dashboard() {
 
   const favoritos = useConsulta(`favoritos:${usuario?.idUsuario}`, (signal) => listarFavoritos(signal));
   const alertas = useConsulta(`alertas-recientes:${usuario?.idUsuario}:${nuevas}`, (signal) => listarAlertas({ pagina: 1 }, signal));
+  const dispositivosDash = useConsulta(`dispositivos-dash:${usuario?.idUsuario}`, (signal) => listarDispositivos(signal));
   const listaFavoritos = favoritos.datos ?? [];
   const recientes = (alertas.datos?.elementos ?? []).slice(0, 3);
+  const totalDispositivos = dispositivosDash.datos?.length ?? null;
+  const dispositivosEnLinea = dispositivosDash.datos?.filter((d) => d.enLinea).length ?? null;
 
   const actualizarClima = async () => {
     setActualizando(true);
@@ -101,13 +105,17 @@ export default function Dashboard() {
 
             <article className="dashboard-summary-card">
               <div className="dashboard-summary-icon">
-                <i className="bi bi-display"></i>
+                <i className="bi bi-cpu"></i>
               </div>
 
               <div>
-                <span>Dispositivos activos</span>
-                <strong>—</strong>
-                <small>Disponible en la fase de dispositivos ESP32</small>
+                <span>Dispositivos en línea</span>
+                <strong>
+                  {dispositivosDash.datos
+                    ? `${dispositivosEnLinea ?? 0} / ${totalDispositivos ?? 0}`
+                    : "—"}
+                </strong>
+                <small><Link to="/dispositivos">Ver mis dispositivos</Link></small>
               </div>
             </article>
 
