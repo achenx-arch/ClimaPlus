@@ -8,6 +8,9 @@ public static class ClaimsClimaPlus
 
     /// <summary>Rol del usuario (USUARIO o ADMINISTRADOR).</summary>
     public const string Rol = "role";
+
+    /// <summary>Sello de sesión: cambia cuando cambia la contraseña (ver SelloSesion).</summary>
+    public const string Sello = "sv";
 }
 
 /// <summary>Nombres de políticas registradas en la aplicación.</summary>
@@ -20,6 +23,8 @@ public static class PoliticasSeguridad
     public const string RateLimitClima = "clima";
 
     public const string RateLimitDispositivos = "dispositivos";
+
+    public const string RateLimitGeneral = "general";
 }
 
 /// <summary>Categoría de log para eventos de seguridad. Nunca registrar contraseñas ni tokens.</summary>

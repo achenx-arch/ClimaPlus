@@ -20,8 +20,19 @@ public abstract class ClimaPlusControllerBase : ControllerBase
         TipoError.RespuestaProveedorInvalida => Problem(statusCode: StatusCodes.Status502BadGateway, title: "Respuesta inválida del proveedor", detail: error.Mensaje),
         TipoError.DispositivoNoAutenticado => Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Dispositivo no autenticado", detail: error.Mensaje),
         TipoError.DispositivoDesactivado => Problem(statusCode: StatusCodes.Status403Forbidden, title: "Dispositivo desactivado", detail: error.Mensaje),
+        TipoError.DemasiadosIntentos => DemasiadosIntentos(error),
         _ => Problem(statusCode: StatusCodes.Status500InternalServerError),
     };
+
+    private IActionResult DemasiadosIntentos(ErrorServicio error)
+    {
+        if (error.ReintentarSegundos is { } segundos)
+        {
+            Response.Headers.RetryAfter = segundos.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "Demasiados intentos", detail: error.Mensaje);
+    }
 
     private IActionResult ErrorDeCampo(ErrorServicio error, int estado, string titulo)
     {

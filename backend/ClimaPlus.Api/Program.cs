@@ -15,6 +15,13 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Fase 8 (A05): Kestrel no anuncia su nombre en la cabecera Server y limita el cuerpo de las peticiones a 1 MB.
+builder.WebHost.ConfigureKestrel(opciones =>
+{
+    opciones.AddServerHeader = false;
+    opciones.Limits.MaxRequestBodySize = 1_048_576;
+});
+
 // Add services to the container.
 
 // Base de datos (Fase 2B).
@@ -104,6 +111,9 @@ var app = builder.Build();
 ObtenerCadenaConexion(app.Configuration);
 
 // Configure the HTTP request pipeline.
+// Fase 8 (A05): cabeceras de seguridad en todas las respuestas, incluidas las de error.
+app.UseCabecerasSeguridad();
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -113,13 +123,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-
-app.Use(async (contexto, siguiente) =>
+// HSTS solo fuera de desarrollo: en localhost obligaría al navegador a usar HTTPS en todos los puertos.
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
-    contexto.Response.Headers["X-Content-Type-Options"] = "nosniff";
-    await siguiente(contexto);
-});
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
 
 app.UseCors(PoliticasSeguridad.CorsFrontend);
 

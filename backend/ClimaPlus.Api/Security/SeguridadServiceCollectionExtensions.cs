@@ -54,9 +54,34 @@ public static class SeguridadServiceCollectionExtensions
                 "'RateLimiting:Dispositivos' requiere PermitLimit y VentanaSegundos mayores que 0.")
             .ValidateOnStart();
 
+        services.AddOptions<LimiteGeneralOptions>()
+            .Bind(configuration.GetSection(LimiteGeneralOptions.Seccion))
+            .Validate(o => o.PermitLimit > 0 && o.VentanaSegundos > 0,
+                "'RateLimiting:General' requiere PermitLimit y VentanaSegundos mayores que 0.")
+            .ValidateOnStart();
+
+        services.AddOptions<IntentosLoginOptions>()
+            .Bind(configuration.GetSection(IntentosLoginOptions.Seccion))
+            .Validate(o => o.MaxFallidos > 0 && o.MinutosBloqueo > 0,
+                "'Seguridad:IntentosLogin' requiere MaxFallidos y MinutosBloqueo mayores que 0.")
+            .ValidateOnStart();
+
+        services.AddOptions<CabecerasSeguridadOptions>()
+            .Bind(configuration.GetSection(CabecerasSeguridadOptions.Seccion))
+            .Validate(o => o.MaxBytesCuerpo > 0, "'Seguridad:Cabeceras:MaxBytesCuerpo' debe ser mayor que 0.")
+            .ValidateOnStart();
+
+        // Fase 8 (A05): HSTS de un año fuera de desarrollo (UseHsts en Program.cs).
+        services.AddHsts(opciones =>
+        {
+            opciones.MaxAge = TimeSpan.FromDays(365);
+            opciones.IncludeSubDomains = true;
+        });
+
         // --- Servicios de seguridad -------------------------------------------------------
         services.AddSingleton<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
         services.AddSingleton<JwtTokenService>();
+        services.AddSingleton<LimitadorIntentosLogin>();
 
         // --- Autenticación JWT ------------------------------------------------------------
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
@@ -108,6 +133,21 @@ public static class SeguridadServiceCollectionExtensions
         services.AddRateLimiter(opciones =>
         {
             opciones.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            // Fase 8 (A04): límite general por IP para toda la API, además de los límites de cada política.
+            opciones.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
+            {
+                var limite = http.RequestServices.GetRequiredService<IOptions<LimiteGeneralOptions>>().Value;
+                var ip = http.Connection.RemoteIpAddress?.ToString() ?? "desconocida";
+
+                return RateLimitPartition.GetFixedWindowLimiter($"{PoliticasSeguridad.RateLimitGeneral}|{ip}", _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = limite.PermitLimit,
+                    Window = TimeSpan.FromSeconds(limite.VentanaSegundos),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                });
+            });
             opciones.OnRejected = async (contexto, cancelacion) =>
             {
                 var http = contexto.HttpContext;
@@ -205,13 +245,22 @@ public static class SeguridadServiceCollectionExtensions
             var estado = await db.Usuarios
                 .AsNoTracking()
                 .Where(u => u.IdUsuario == idUsuario)
-                .Select(u => new { u.Activo, u.Rol })
+                .Select(u => new { u.Activo, u.Rol, u.PasswordHash })
                 .SingleOrDefaultAsync(contexto.HttpContext.RequestAborted);
 
-            if (estado is null || !estado.Activo || !string.Equals(estado.Rol, rolToken, StringComparison.Ordinal))
+            // Fase 8 (A07): el sello del token debe coincidir con la contraseña actual; si cambió, la sesión se revoca.
+            var claveJwt = servicios.GetRequiredService<IOptions<JwtOptions>>().Value.Clave;
+            var sello = contexto.Principal?.FindFirst(ClaimsClimaPlus.Sello)?.Value;
+
+            string? motivo = estado is null ? "usuario_inexistente"
+                : !estado.Activo ? "cuenta_desactivada"
+                : !string.Equals(estado.Rol, rolToken, StringComparison.Ordinal) ? "rol_cambiado"
+                : !SelloSesion.Coincide(sello, estado.PasswordHash, claveJwt) ? "sesion_revocada"
+                : null;
+
+            if (motivo is not null)
             {
-                log.LogWarning("Seguridad: token_rechazado idUsuario={IdUsuario} motivo={Motivo}", idUsuario,
-                    estado is null ? "usuario_inexistente" : !estado.Activo ? "cuenta_desactivada" : "rol_cambiado");
+                log.LogWarning("Seguridad: token_rechazado idUsuario={IdUsuario} motivo={Motivo}", idUsuario, motivo);
                 contexto.Fail("La sesión ya no es válida.");
             }
         },

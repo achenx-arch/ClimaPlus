@@ -21,13 +21,16 @@ public sealed class AuthService
     private readonly ClimaPlusDbContext _db;
     private readonly IPasswordHasher<Usuario> _hasher;
     private readonly JwtTokenService _tokens;
+    private readonly LimitadorIntentosLogin _intentos;
     private readonly ILogger _log;
 
-    public AuthService(ClimaPlusDbContext db, IPasswordHasher<Usuario> hasher, JwtTokenService tokens, ILoggerFactory logs)
+    public AuthService(
+        ClimaPlusDbContext db, IPasswordHasher<Usuario> hasher, JwtTokenService tokens, LimitadorIntentosLogin intentos, ILoggerFactory logs)
     {
         _db = db;
         _hasher = hasher;
         _tokens = tokens;
+        _intentos = intentos;
         _log = logs.CreateLogger(RegistroSeguridad.Categoria);
     }
 
@@ -70,11 +73,25 @@ public sealed class AuthService
     public async Task<Resultado<LoginResponse>> IniciarSesionAsync(LoginRequest solicitud, string ip, CancellationToken cancelacion)
     {
         var correo = Normalizacion.Correo(solicitud.Correo);
+
+        // Fase 8 (A07): bloqueo temporal por cuenta tras varios fallos seguidos. Se comprueba antes de buscar al
+        // usuario y vale igual para correos inexistentes, así no revela qué cuentas existen.
+        if (_intentos.TiempoBloqueo(correo) is { } bloqueo)
+        {
+            var segundos = (int)Math.Ceiling(bloqueo.TotalSeconds);
+            _log.LogWarning("Seguridad: login_bloqueado correo={Correo} ip={Ip} segundos={Segundos}",
+                RegistroSeguridad.EnmascararCorreo(correo), ip, segundos);
+            return Resultado<LoginResponse>.Falla(new ErrorServicio(TipoError.DemasiadosIntentos,
+                "Demasiados intentos fallidos para esta cuenta. Espera unos minutos e inténtalo de nuevo.",
+                ReintentarSegundos: segundos));
+        }
+
         var usuario = await _db.Usuarios.SingleOrDefaultAsync(u => u.Correo == correo, cancelacion);
 
         if (usuario is null)
         {
             _hasher.VerifyHashedPassword(new Usuario(), HashFicticio.Value, solicitud.Password);
+            _intentos.RegistrarFallo(correo);
             _log.LogWarning("Seguridad: login_fallido motivo=credenciales correo={Correo} ip={Ip}",
                 RegistroSeguridad.EnmascararCorreo(correo), ip);
             return Resultado<LoginResponse>.Falla(CredencialesInvalidas());
@@ -83,9 +100,13 @@ public sealed class AuthService
         var verificacion = _hasher.VerifyHashedPassword(usuario, usuario.PasswordHash, solicitud.Password);
         if (verificacion == PasswordVerificationResult.Failed)
         {
+            _intentos.RegistrarFallo(correo);
             _log.LogWarning("Seguridad: login_fallido motivo=credenciales idUsuario={IdUsuario} ip={Ip}", usuario.IdUsuario, ip);
             return Resultado<LoginResponse>.Falla(CredencialesInvalidas());
         }
+
+        // La contraseña era correcta: se reinicia el contador de fallos.
+        _intentos.Reiniciar(correo);
 
         // Solo después de comprobar la contraseña se informa que la cuenta está desactivada (RN-BD-07).
         if (!usuario.Activo)

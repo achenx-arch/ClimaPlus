@@ -22,10 +22,13 @@ public enum TipoError
 
     /// <summary>El dispositivo o la cuenta de su dueño están desactivados (403, D-11, RN-BD-29).</summary>
     DispositivoDesactivado,
+
+    /// <summary>Demasiados intentos fallidos de inicio de sesión para la cuenta (429, Fase 8).</summary>
+    DemasiadosIntentos,
 }
 
 /// <summary>Error de negocio devuelto por un servicio. Campo = nombre del campo JSON afectado, si aplica.</summary>
-public sealed record ErrorServicio(TipoError Tipo, string Mensaje, string? Campo = null);
+public sealed record ErrorServicio(TipoError Tipo, string Mensaje, string? Campo = null, int? ReintentarSegundos = null);
 
 /// <summary>Resultado de una operación sin valor de retorno.</summary>
 public class Resultado
