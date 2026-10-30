@@ -249,3 +249,46 @@ export interface FiltroAlertasAdmin extends FiltroAlertas {
   hasta?: string;
   idUsuario?: number;
 }
+
+// ─── Dispositivos ESP32 (contrato-dispositivos-lecturas.md) ──────────────────
+
+/** Última lectura resumida dentro del objeto Dispositivo. */
+export interface UltimaLecturaDispositivo {
+  idLectura: number;
+  fechaLectura: string;
+  temperatura: number | null;
+  humedad: number | null;
+  lluvia: boolean | null;
+  luz: number | null;
+}
+
+/** Objeto Dispositivo tal como lo devuelve GET /api/dispositivos y GET /api/dispositivos/{id}. */
+export interface Dispositivo {
+  idDispositivo: number;
+  nombre: string;
+  activo: boolean;
+  /** true si la última lectura llegó hace 5 minutos o menos (DP-F7-1). */
+  enLinea: boolean;
+  /** null si el dispositivo nunca envió datos. */
+  ultimaConexion: string | null;
+  fechaCreacion: string;
+  ubicacion: Ubicacion;
+  ultimaLectura: UltimaLecturaDispositivo | null;
+}
+
+/** Una lectura individual paginada de GET /api/dispositivos/{id}/lecturas. */
+export interface LecturaDispositivo {
+  idLectura: number;
+  fechaLectura: string;
+  temperatura: number | null;
+  humedad: number | null;
+  lluvia: boolean | null;
+  luz: number | null;
+}
+
+/** Respuesta de POST /api/dispositivos (201). La apiKey se muestra una única vez (RN-BD-28). */
+export interface DispositivoRegistrado {
+  dispositivo: Dispositivo;
+  apiKey: string;
+  aviso: string;
+}
