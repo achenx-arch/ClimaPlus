@@ -5,7 +5,7 @@
 #  Construir:  docker build --build-arg VITE_API_URL=http://localhost:8080 -t climaplus-web ./frontend
 # =====================================================================
 
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
