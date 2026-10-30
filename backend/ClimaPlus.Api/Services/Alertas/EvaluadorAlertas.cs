@@ -52,7 +52,20 @@ public static class EvaluadorAlertas
 
     /// <summary>Alertas que dispara una medición de clima actual. Si alta y baja se cumplen a la vez, se devuelven ambas (DP-9).</summary>
     public static IReadOnlyList<AlertaPropuesta> Evaluar(
-        decimal temperatura, short codigoCondicion, long idUbicacion, string nombreUbicacion, IEnumerable<ReglaEvaluable> reglas)
+        decimal temperatura, short codigoCondicion, long idUbicacion, string nombreUbicacion, IEnumerable<ReglaEvaluable> reglas) =>
+        EvaluarMediciones(temperatura, EsLluvia(codigoCondicion), idUbicacion, nombreUbicacion, reglas);
+
+    /// <summary>
+    /// Alertas que dispara una lectura del ESP32 (RF-24, RN-BD-33). Las mediciones son opcionales (RN-BD-31):
+    /// sin temperatura no se evalúan las reglas de temperatura y solo <c>lluvia = true</c> dispara LLUVIA (D-08).
+    /// Mismas reglas, prioridades y mensajes que la consulta ACTUAL.
+    /// </summary>
+    public static IReadOnlyList<AlertaPropuesta> EvaluarLectura(
+        decimal? temperatura, bool? lluvia, long idUbicacion, string nombreUbicacion, IEnumerable<ReglaEvaluable> reglas) =>
+        EvaluarMediciones(temperatura, lluvia == true, idUbicacion, nombreUbicacion, reglas);
+
+    private static IReadOnlyList<AlertaPropuesta> EvaluarMediciones(
+        decimal? temperatura, bool llueve, long idUbicacion, string nombreUbicacion, IEnumerable<ReglaEvaluable> reglas)
     {
         var propuestas = new List<AlertaPropuesta>();
 
@@ -60,13 +73,13 @@ public static class EvaluadorAlertas
         {
             switch (regla.Tipo)
             {
-                case TiposAlerta.TemperaturaAlta when regla.ValorUmbral is { } umbral && temperatura > umbral:
-                    propuestas.Add(new AlertaPropuesta(regla.Tipo, temperatura, umbral, MensajeTemperaturaAlta(nombreUbicacion, temperatura, umbral)));
+                case TiposAlerta.TemperaturaAlta when regla.ValorUmbral is { } umbral && temperatura is { } t && t > umbral:
+                    propuestas.Add(new AlertaPropuesta(regla.Tipo, t, umbral, MensajeTemperaturaAlta(nombreUbicacion, t, umbral)));
                     break;
-                case TiposAlerta.TemperaturaBaja when regla.ValorUmbral is { } umbral && temperatura < umbral:
-                    propuestas.Add(new AlertaPropuesta(regla.Tipo, temperatura, umbral, MensajeTemperaturaBaja(nombreUbicacion, temperatura, umbral)));
+                case TiposAlerta.TemperaturaBaja when regla.ValorUmbral is { } umbral && temperatura is { } t && t < umbral:
+                    propuestas.Add(new AlertaPropuesta(regla.Tipo, t, umbral, MensajeTemperaturaBaja(nombreUbicacion, t, umbral)));
                     break;
-                case TiposAlerta.Lluvia when EsLluvia(codigoCondicion):
+                case TiposAlerta.Lluvia when llueve:
                     propuestas.Add(new AlertaPropuesta(regla.Tipo, null, null, MensajeLluvia(nombreUbicacion)));
                     break;
             }

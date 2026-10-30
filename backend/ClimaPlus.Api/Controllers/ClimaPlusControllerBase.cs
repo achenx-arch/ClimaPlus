@@ -18,6 +18,8 @@ public abstract class ClimaPlusControllerBase : ControllerBase
         TipoError.ServicioNoDisponible => Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Servicio no disponible", detail: error.Mensaje),
         TipoError.TiempoAgotado => Problem(statusCode: StatusCodes.Status504GatewayTimeout, title: "Tiempo de espera agotado", detail: error.Mensaje),
         TipoError.RespuestaProveedorInvalida => Problem(statusCode: StatusCodes.Status502BadGateway, title: "Respuesta inválida del proveedor", detail: error.Mensaje),
+        TipoError.DispositivoNoAutenticado => Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Dispositivo no autenticado", detail: error.Mensaje),
+        TipoError.DispositivoDesactivado => Problem(statusCode: StatusCodes.Status403Forbidden, title: "Dispositivo desactivado", detail: error.Mensaje),
         _ => Problem(statusCode: StatusCodes.Status500InternalServerError),
     };
 

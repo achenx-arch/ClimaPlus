@@ -7,9 +7,9 @@ using Microsoft.EntityFrameworkCore;
 namespace ClimaPlus.Api.Services.Alertas;
 
 /// <summary>
-/// Genera alertas a partir de una consulta ACTUAL de un usuario autenticado (D-02, RF-16).
-/// No llama a OpenWeather: usa los valores ya validados y guardados en consulta_clima.
-/// Reglas: RN-BD-20, 22, 23, 24, 25, 27, 35 y 42. Las alertas no se editan nunca (RN-BD-26).
+/// Genera alertas a partir de una consulta ACTUAL de un usuario autenticado (D-02, RF-16) o de una lectura del ESP32 (RF-24).
+/// No llama a OpenWeather: usa los valores ya validados y guardados en consulta_clima o lectura_sensor.
+/// Reglas: RN-BD-20, 22, 23, 24, 25, 27, 33, 35 y 42. Las alertas no se editan nunca (RN-BD-26).
 /// </summary>
 public sealed class MotorAlertas : IMotorAlertas
 {
@@ -55,18 +55,42 @@ public sealed class MotorAlertas : IMotorAlertas
 
     public async Task<IReadOnlyList<AlertaGeneradaResponse>> EvaluarConsultaActualAsync(ConsultaActualEvaluable consulta, CancellationToken cancelacion)
     {
-        // Reglas activas del usuario (activo, RN-BD-22) para esta ubicación o globales. Máximo 6 filas.
-        var reglas = await _db.ConfiguracionesAlerta
-            .AsNoTracking()
-            .Where(r => r.IdUsuario == consulta.IdUsuario
-                        && r.Activa
-                        && r.Usuario.Activo
-                        && (r.IdUbicacion == consulta.IdUbicacion || r.IdUbicacion == null))
-            .Select(r => new ReglaEvaluable(r.IdConfiguracion, r.Tipo, r.IdUbicacion, r.ValorUmbral, r.Activa))
-            .ToListAsync(cancelacion);
+        var reglas = await LeerReglasAsync(consulta.IdUsuario, consulta.IdUbicacion, cancelacion);
 
         var propuestas = EvaluadorAlertas.Evaluar(
             consulta.Temperatura, consulta.CodigoCondicion, consulta.IdUbicacion, consulta.NombreUbicacion, reglas);
+
+        // RN-BD-23: origen único, la consulta del mismo usuario (RN-BD-42).
+        return await GuardarAsync(consulta.IdUsuario, consulta.IdUbicacion, consulta.IdConsulta, null, propuestas, cancelacion);
+    }
+
+    public async Task<IReadOnlyList<AlertaGeneradaResponse>> EvaluarLecturaAsync(LecturaEvaluable lectura, CancellationToken cancelacion)
+    {
+        // RN-BD-33: reglas del dueño del dispositivo, para la ubicación del dispositivo.
+        var reglas = await LeerReglasAsync(lectura.IdUsuario, lectura.IdUbicacion, cancelacion);
+
+        var propuestas = EvaluadorAlertas.EvaluarLectura(
+            lectura.Temperatura, lectura.Lluvia, lectura.IdUbicacion, lectura.NombreUbicacion, reglas);
+
+        // RN-BD-23: origen único, la lectura del ESP32.
+        return await GuardarAsync(lectura.IdUsuario, lectura.IdUbicacion, null, lectura.IdLectura, propuestas, cancelacion);
+    }
+
+    /// <summary>Reglas activas del usuario (activo, RN-BD-22) para esta ubicación o globales. Máximo 6 filas.</summary>
+    private Task<List<ReglaEvaluable>> LeerReglasAsync(long idUsuario, long idUbicacion, CancellationToken cancelacion) =>
+        _db.ConfiguracionesAlerta
+            .AsNoTracking()
+            .Where(r => r.IdUsuario == idUsuario
+                        && r.Activa
+                        && r.Usuario.Activo
+                        && (r.IdUbicacion == idUbicacion || r.IdUbicacion == null))
+            .Select(r => new ReglaEvaluable(r.IdConfiguracion, r.Tipo, r.IdUbicacion, r.ValorUmbral, r.Activa))
+            .ToListAsync(cancelacion);
+
+    /// <summary>Aplica el anti-duplicado (RN-BD-27) y guarda las alertas nuevas con su origen (consulta o lectura).</summary>
+    private async Task<IReadOnlyList<AlertaGeneradaResponse>> GuardarAsync(
+        long idUsuario, long idUbicacion, long? idConsulta, long? idLectura, IReadOnlyList<AlertaPropuesta> propuestas, CancellationToken cancelacion)
+    {
         if (propuestas.Count == 0)
         {
             return Array.Empty<AlertaGeneradaResponse>();
@@ -81,8 +105,8 @@ public sealed class MotorAlertas : IMotorAlertas
         // RN-BD-27: cualquier alerta del mismo usuario, ubicación y tipo en la ventana, sin importar su estado ni origen.
         var bloqueados = await _db.Alertas
             .AsNoTracking()
-            .Where(a => a.IdUsuario == consulta.IdUsuario
-                        && a.IdUbicacion == consulta.IdUbicacion
+            .Where(a => a.IdUsuario == idUsuario
+                        && a.IdUbicacion == idUbicacion
                         && tipos.Contains(a.Tipo)
                         && a.FechaGeneracion > limite)
             .Select(a => a.Tipo)
@@ -93,10 +117,10 @@ public sealed class MotorAlertas : IMotorAlertas
             .Where(p => !bloqueados.Contains(p.Tipo))
             .Select(p => new Alerta
             {
-                IdUsuario = consulta.IdUsuario,
-                IdUbicacion = consulta.IdUbicacion,
-                IdConsulta = consulta.IdConsulta,     // RN-BD-23: origen único, la consulta del mismo usuario (RN-BD-42)
-                IdLectura = null,
+                IdUsuario = idUsuario,
+                IdUbicacion = idUbicacion,
+                IdConsulta = idConsulta,              // RN-BD-23: exactamente uno de los dos orígenes
+                IdLectura = idLectura,
                 Tipo = p.Tipo,
                 ValorDetectado = p.ValorDetectado,    // RN-BD-24: NULL en lluvia
                 ValorUmbral = p.ValorUmbral,
@@ -109,7 +133,7 @@ public sealed class MotorAlertas : IMotorAlertas
         foreach (var tipo in bloqueados)
         {
             _log.LogInformation("Alertas: omitida_por_duplicado idUsuario={IdUsuario} idUbicacion={IdUbicacion} tipo={Tipo}",
-                consulta.IdUsuario, consulta.IdUbicacion, tipo);
+                idUsuario, idUbicacion, tipo);
         }
 
         if (nuevas.Count == 0)
@@ -123,8 +147,8 @@ public sealed class MotorAlertas : IMotorAlertas
         foreach (var alerta in nuevas)
         {
             _db.Entry(alerta).State = EntityState.Detached;
-            _log.LogInformation("Alertas: generada idAlerta={IdAlerta} idUsuario={IdUsuario} idUbicacion={IdUbicacion} idConsulta={IdConsulta} tipo={Tipo}",
-                alerta.IdAlerta, alerta.IdUsuario, alerta.IdUbicacion, alerta.IdConsulta, alerta.Tipo);
+            _log.LogInformation("Alertas: generada idAlerta={IdAlerta} idUsuario={IdUsuario} idUbicacion={IdUbicacion} idConsulta={IdConsulta} idLectura={IdLectura} tipo={Tipo}",
+                alerta.IdAlerta, alerta.IdUsuario, alerta.IdUbicacion, alerta.IdConsulta, alerta.IdLectura, alerta.Tipo);
         }
 
         return nuevas.Select(a => new AlertaGeneradaResponse(a.IdAlerta, a.Tipo, a.Mensaje, a.FechaGeneracion)).ToList();

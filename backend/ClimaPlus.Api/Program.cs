@@ -4,8 +4,10 @@ using ClimaPlus.Api.Security;
 using ClimaPlus.Api.Services;
 using ClimaPlus.Api.Services.Alertas;
 using ClimaPlus.Api.Services.Clima;
+using ClimaPlus.Api.Services.Dispositivos;
 using ClimaPlus.Api.Services.Favoritos;
 using ClimaPlus.Api.Services.Historial;
+using ClimaPlus.Api.Services.Lecturas;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -53,6 +55,10 @@ builder.Services.AddScoped<AlertaService>();
 // Motor de alertas (Fase 2H, RF-16): se ejecuta dentro de GET /api/clima/actual, sin tareas en segundo plano (D-02).
 builder.Services.AddScoped<IMotorAlertas, MotorAlertas>();
 
+// Dispositivos ESP32 y lecturas (Fase 7, RF-20 a RF-24). Las lecturas reutilizan el motor de alertas.
+builder.Services.AddScoped<DispositivoService>();
+builder.Services.AddScoped<LecturaService>();
+
 // Errores de validación con nombres de campo en camelCase (los mismos del JSON).
 builder.Services.AddControllers(opciones =>
     opciones.ModelMetadataDetailsProviders.Add(new SystemTextJsonValidationMetadataProvider()));
@@ -78,6 +84,18 @@ builder.Services.AddSwaggerGen(opciones =>
     };
     opciones.AddSecurityDefinition("Bearer", esquemaJwt);
     opciones.AddSecurityRequirement(new OpenApiSecurityRequirement { { esquemaJwt, Array.Empty<string>() } });
+
+    // Fase 7: el ESP32 se autentica con X-Device-Key (solo POST /api/lecturas). En Swagger, "Authorize" → DeviceKey.
+    var esquemaDispositivo = new OpenApiSecurityScheme
+    {
+        Name = ApiKeyDispositivo.Cabecera,
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Description = "API Key del dispositivo (cpk_…), devuelta una sola vez por POST /api/dispositivos.",
+        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "DeviceKey" },
+    };
+    opciones.AddSecurityDefinition("DeviceKey", esquemaDispositivo);
+    opciones.AddSecurityRequirement(new OpenApiSecurityRequirement { { esquemaDispositivo, Array.Empty<string>() } });
 });
 
 var app = builder.Build();

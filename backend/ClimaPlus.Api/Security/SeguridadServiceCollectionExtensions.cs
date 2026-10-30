@@ -48,6 +48,12 @@ public static class SeguridadServiceCollectionExtensions
                 "'RateLimiting:Clima' requiere PermitLimit y VentanaSegundos mayores que 0.")
             .ValidateOnStart();
 
+        services.AddOptions<LimiteDispositivosOptions>()
+            .Bind(configuration.GetSection(LimiteDispositivosOptions.Seccion))
+            .Validate(o => o.PermitLimit > 0 && o.VentanaSegundos > 0,
+                "'RateLimiting:Dispositivos' requiere PermitLimit y VentanaSegundos mayores que 0.")
+            .ValidateOnStart();
+
         // --- Servicios de seguridad -------------------------------------------------------
         services.AddSingleton<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
         services.AddSingleton<JwtTokenService>();
@@ -98,7 +104,7 @@ public static class SeguridadServiceCollectionExtensions
             });
         });
 
-        // --- Rate limiting (autenticación y clima) ----------------------------------------------
+        // --- Rate limiting (autenticación, clima y dispositivos) ----------------------------------------------
         services.AddRateLimiter(opciones =>
         {
             opciones.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -147,6 +153,24 @@ public static class SeguridadServiceCollectionExtensions
                 var ip = http.Connection.RemoteIpAddress?.ToString() ?? "desconocida";
 
                 return RateLimitPartition.GetFixedWindowLimiter($"clima|{ip}", _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = limite.PermitLimit,
+                    Window = TimeSpan.FromSeconds(limite.VentanaSegundos),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                });
+            });
+
+            // Fase 7: POST /api/lecturas, por dispositivo (hash de la API Key, nunca la clave) o por IP.
+            opciones.AddPolicy(PoliticasSeguridad.RateLimitDispositivos, http =>
+            {
+                var limite = http.RequestServices.GetRequiredService<IOptions<LimiteDispositivosOptions>>().Value;
+                var apiKey = http.Request.Headers[ApiKeyDispositivo.Cabecera].ToString();
+                var particion = ApiKeyDispositivo.FormatoValido(apiKey)
+                    ? "dispositivo|" + ApiKeyDispositivo.Hash(apiKey)
+                    : "dispositivo-ip|" + (http.Connection.RemoteIpAddress?.ToString() ?? "desconocida");
+
+                return RateLimitPartition.GetFixedWindowLimiter(particion, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = limite.PermitLimit,
                     Window = TimeSpan.FromSeconds(limite.VentanaSegundos),
