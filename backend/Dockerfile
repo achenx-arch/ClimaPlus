@@ -15,7 +15,7 @@ RUN dotnet restore ClimaPlus.Api/ClimaPlus.Api.csproj
 COPY ClimaPlus.Api/ ClimaPlus.Api/
 RUN dotnet publish ClimaPlus.Api/ClimaPlus.Api.csproj -c Release -o /app/publish --no-restore /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
 ENV ASPNETCORE_URLS=http://+:8080 \
