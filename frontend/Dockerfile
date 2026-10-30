@@ -17,7 +17,7 @@ ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 
 # Nginx sin privilegios (escucha en 8080 y corre con el usuario nginx).
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS final
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS final
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY nginx/cabeceras-seguridad.conf /etc/nginx/snippets/cabeceras-seguridad.conf
 COPY --from=build /app/dist /usr/share/nginx/html
