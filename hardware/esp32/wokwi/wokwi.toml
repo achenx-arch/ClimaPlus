@@ -1,0 +1,6 @@
+# Simulación con la extensión Wokwi de VS Code.
+# Compila antes con:  arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 --output-dir ../climaplus_esp32/build ../climaplus_esp32
+[wokwi]
+version = 1
+firmware = "../climaplus_esp32/build/climaplus_esp32.ino.bin"
+elf = "../climaplus_esp32/build/climaplus_esp32.ino.elf"
