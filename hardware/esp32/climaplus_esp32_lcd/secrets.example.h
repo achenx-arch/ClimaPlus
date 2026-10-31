@@ -8,18 +8,17 @@
 #pragma once
 
 // ---------- Red WiFi (2.4 GHz; el ESP32 no se conecta a redes de 5 GHz) ----------
-#define WIFI_SSID     "iPhone de ACHX"
-#define WIFI_PASSWORD "012345678"
+#define WIFI_SSID     "NOMBRE_DE_TU_RED"
+#define WIFI_PASSWORD "CONTRASENA_DE_TU_RED"
 
 // ---------- API de ClimaPlus ----------
 // IP de tu PC (ipconfig → Dirección IPv4). No uses "localhost".
 
-#define API_URL "http://172.20.10.2:8080/api/lecturas"
 //   En modo desarrollo:  http://TU-IP:5208/api/lecturas
 #define API_URL "http://192.168.1.50:8080/api/lecturas"
 
 // API Key que muestra "Mis dispositivos" al registrar el dispositivo (una sola vez).
-#define DEVICE_KEY "cpk_LRvXFLj4y9fyA8OFcsJ-PNXIPSUAL_xV0JBoGBgvX9A"
+#define DEVICE_KEY "cpk_PEGA_AQUI_TU_API_KEY"
 
 // ---------- Sensor DHT ----------
 // DHT11 = carcasa azul (0–50 °C, 20–90 %).  DHT22 = carcasa blanca (−40–80 °C, 0–100 %).
