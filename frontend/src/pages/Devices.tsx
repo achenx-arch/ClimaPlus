@@ -513,13 +513,15 @@ export default function Devices() {
                     </button>
                   </div>
                 ) : (
-                  <form
-                    onSubmit={(e) => { e.preventDefault(); void buscadorReg.buscar(busquedaReg); }}
+                  // Búsqueda sin <form>: un formulario dentro del formulario del modal recargaba la página y cerraba la sesión.
+                  <div
+                    role="search"
                     style={{ display: "flex", gap: "8px" }}
                   >
                     <input
                       id="reg-busqueda-ubicacion"
                       type="search"
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void buscadorReg.buscar(busquedaReg); } }}
                       value={busquedaReg}
                       onChange={(e) => setBusquedaReg(e.target.value)}
                       placeholder="Buscar ciudad o municipio"
@@ -527,14 +529,15 @@ export default function Devices() {
                       style={{ flex: 1, padding: "10px 12px", border: "1px solid #d9e9f7", borderRadius: "8px", fontSize: "14px" }}
                     />
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={() => { void buscadorReg.buscar(busquedaReg); }}
                       className="devices-save-button"
                       style={{ padding: "10px 14px" }}
                       disabled={buscadorReg.buscando}
                     >
                       {buscadorReg.buscando ? "..." : "Buscar"}
                     </button>
-                  </form>
+                  </div>
                 )}
 
                 {buscadorReg.error && (
@@ -707,13 +710,15 @@ export default function Devices() {
                     </button>
                   </div>
                 ) : (
-                  <form
-                    onSubmit={(e) => { e.preventDefault(); void buscadorEdit.buscar(busquedaEdit); }}
+                  // Búsqueda sin <form>: un formulario dentro del formulario del modal recargaba la página y cerraba la sesión.
+                  <div
+                    role="search"
                     style={{ display: "flex", gap: "8px" }}
                   >
                     <input
                       id="edit-busqueda-ubicacion"
                       type="search"
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void buscadorEdit.buscar(busquedaEdit); } }}
                       value={busquedaEdit}
                       onChange={(e) => setBusquedaEdit(e.target.value)}
                       placeholder="Buscar ciudad o municipio"
@@ -721,14 +726,15 @@ export default function Devices() {
                       style={{ flex: 1, padding: "10px 12px", border: "1px solid #d9e9f7", borderRadius: "8px", fontSize: "14px" }}
                     />
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={() => { void buscadorEdit.buscar(busquedaEdit); }}
                       className="devices-save-button"
                       style={{ padding: "10px 14px" }}
                       disabled={buscadorEdit.buscando}
                     >
                       {buscadorEdit.buscando ? "..." : "Buscar"}
                     </button>
-                  </form>
+                  </div>
                 )}
 
                 {buscadorEdit.error && (

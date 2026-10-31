@@ -124,6 +124,26 @@ describe("M11 – mis dispositivos", () => {
     });
   });
 
+  it("buscar la ubicación no envía el formulario del modal (no recarga la página ni cierra la sesión)", async () => {
+    const servidor = servidorConSesion()
+      .en("GET", "/api/dispositivos", { cuerpo: [] })
+      .en("GET", "/api/clima/ubicaciones", { cuerpo: [coban] });
+    renderizar(<Devices />, { ruta: "/dispositivos" });
+    const usuarioEvento = userEvent.setup();
+    await screen.findByText("Aún no tienes dispositivos");
+    await usuarioEvento.click(screen.getByRole("button", { name: /Registrar dispositivo/i }));
+
+    // Un <form> dentro de otro <form> hace que el navegador envíe el formulario y recargue la página.
+    expect(document.querySelectorAll("form form")).toHaveLength(0);
+
+    // Enter en el buscador busca, sin enviar el registro.
+    await usuarioEvento.type(screen.getByPlaceholderText("Buscar ciudad o municipio"), "Carchá{Enter}");
+    expect(await screen.findByRole("button", { name: /Cobán.*Seleccionar/ })).toBeInTheDocument();
+    expect(servidor.a("/api/clima/ubicaciones", "GET")).toHaveLength(1);
+    expect(servidor.a("/api/dispositivos", "POST")).toHaveLength(0);
+    expect(screen.queryByText("Busca y selecciona una ubicación.")).not.toBeInTheDocument();
+  });
+
   it("el 409 muestra el mensaje de error en el campo nombre", async () => {
     servidorConSesion()
       .en("GET", "/api/dispositivos", { cuerpo: [] })

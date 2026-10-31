@@ -19,7 +19,7 @@ const ENLACES_USUARIO: Enlace[] = [
   { ruta: "/historial", icono: "bi-clock-history", texto: "Historial" },
   { ruta: "/alertas", icono: "bi-bell", texto: "Alertas" },
   { ruta: "/configuracion-alertas", icono: "bi-sliders", texto: "Configuración de alertas" },
-  { ruta: "/dispositivos", icono: "bi-pc-display", texto: "Mis dispositivos", pendiente: true },
+  { ruta: "/dispositivos", icono: "bi-pc-display", texto: "Mis dispositivos" },
 ];
 
 const clase = ({ isActive }: { isActive: boolean }) => `user-sidebar-link ${isActive ? "active" : ""}`;
