@@ -47,9 +47,9 @@ jobs:
       # Base aislada que termina en _test (las pruebas se niegan a usar otra).
       CLIMAPLUS_TEST_DB: Host=localhost;Port=5432;Database=climaplus_test;Username=postgres;Password=postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -96,7 +96,7 @@ jobs:
 
       - name: Guardar resultados
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: resultados-backend
           path: TestResults/
@@ -125,7 +125,7 @@ jobs:
       PGPASSWORD: postgres
       PGDATABASE: climaplus_ci_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Aplicar migraciones 001 a 003
         run: |
@@ -160,9 +160,9 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -182,7 +182,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Crear .env con secretos de un solo uso
         run: |
