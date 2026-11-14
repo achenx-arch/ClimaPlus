@@ -215,18 +215,30 @@ jobs:
       - name: Prueba de humo
         run: |
           set -e
+          esperar_codigo() {
+            local asunto="$1" mensajes id detalle codigo
+            for _ in $(seq 1 20); do
+              mensajes=$(curl -fsS --get --data-urlencode 'query=to:ci@ejemplo.com' \
+                http://localhost:8025/api/v1/search) || return 1
+              id=$(jq -r --arg asunto "$asunto" '[.messages[] | select(.Subject == $asunto)][0].ID // empty' <<< "$mensajes")
+              if [ -n "$id" ]; then
+                detalle=$(curl -fsS "http://localhost:8025/api/v1/message/$id") || return 1
+                codigo=$(jq -r '.Text' <<< "$detalle" | tr -d '\r' | grep -oE '^ {4}[0-9]{6}$' | tr -d ' ')
+                test -n "$codigo" || return 1
+                echo "$codigo"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "::error::Mailpit no recibió el correo esperado: $asunto" >&2
+            return 1
+          }
           # Registro (202 + código por correo), verificación con el código leído de Mailpit e inicio de sesión,
           # contra PostgreSQL inicializado con las migraciones 001 a 004.
           DESAFIO=$(curl -fsS -X POST http://localhost:8080/api/auth/register -H "Content-Type: application/json" \
             -d '{"nombre":"Prueba CI","correo":"ci@ejemplo.com","password":"ClimaPlus2026"}' | jq -r '.desafio')
           test -n "$DESAFIO" && test "$DESAFIO" != "null"
-          CODIGO=""
-          for _ in $(seq 1 20); do
-            CODIGO=$(curl -fsS http://localhost:8025/api/v1/message/latest | jq -r '.Text' | grep -oE '^ {4}[0-9]{6}$' | tr -d ' ' || true)
-            if [ -n "$CODIGO" ]; then break; fi
-            sleep 1
-          done
-          test -n "$CODIGO"
+          CODIGO=$(esperar_codigo 'Verifica tu correo en ClimaPlus')
           test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/auth/verificar-correo \
             -H "Content-Type: application/json" -d "{\"desafio\":\"$DESAFIO\",\"codigo\":\"$CODIGO\"}")" = "204"
           # Inicio de sesión en dos pasos: contraseña (202 + código por correo) y código (200 con el JWT).
@@ -234,13 +246,7 @@ jobs:
             -d '{"correo":"ci@ejemplo.com","password":"ClimaPlus2026"}')
           if echo "$LOGIN" | grep -q '"token"'; then echo "::error::El paso 1 del login no debe entregar el JWT"; exit 1; fi
           DESAFIO_LOGIN=$(echo "$LOGIN" | jq -r '.desafio')
-          CODIGO_LOGIN=""
-          for _ in $(seq 1 20); do
-            CODIGO_LOGIN=$(curl -fsS http://localhost:8025/api/v1/message/latest | jq -r '.Text' | grep -oE '^ {4}[0-9]{6}$' | tr -d ' ' || true)
-            if [ -n "$CODIGO_LOGIN" ] && [ "$CODIGO_LOGIN" != "$CODIGO" ]; then break; fi
-            sleep 1
-          done
-          test -n "$CODIGO_LOGIN"
+          CODIGO_LOGIN=$(esperar_codigo 'Tu código para iniciar sesión en ClimaPlus')
           curl -fsS -X POST http://localhost:8080/api/auth/login/verificar -H "Content-Type: application/json" \
             -d "{\"desafio\":\"$DESAFIO_LOGIN\",\"codigo\":\"$CODIGO_LOGIN\"}" | grep -q '"token"'
           # Cabeceras de seguridad de la API y del frontend; rutas de React servidas por Nginx.
