@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -42,6 +43,27 @@ public static class SeguridadServiceCollectionExtensions
                 "'RateLimiting:Autenticacion' requiere PermitLimit y VentanaSegundos mayores que 0.")
             .ValidateOnStart();
 
+        // Autenticación segura (condición 2): políticas por flujo, cada una con su propio límite por IP.
+        AgregarLimite<LimiteRegistroOptions>(services, configuration, LimiteRegistroOptions.Seccion);
+        AgregarLimite<LimiteCodigosOptions>(services, configuration, LimiteCodigosOptions.Seccion);
+        AgregarLimite<LimiteReenvioOptions>(services, configuration, LimiteReenvioOptions.Seccion);
+        AgregarLimite<LimiteRecuperacionOptions>(services, configuration, LimiteRecuperacionOptions.Seccion);
+
+        // Códigos de verificación: la clave HMAC es obligatoria, de 32 bytes o más y distinta de la del JWT.
+        services.AddOptions<CodigosOptions>()
+            .Bind(configuration.GetSection(CodigosOptions.Seccion))
+            .Validate(o => o.ClaveValida,
+                $"'Codigos:ClaveHmac' es obligatoria y debe tener al menos {CodigosOptions.BytesMinimosClave} bytes (variable CODIGOS_CLAVE_HMAC).")
+            .Validate<IOptions<JwtOptions>>((o, jwt) => !string.Equals(o.ClaveHmac, jwt.Value.Clave, StringComparison.Ordinal),
+                "'Codigos:ClaveHmac' debe ser distinta de 'Jwt:Clave'.")
+            .Validate(o => o.MinutosVerificacion is > 0 and <= 60 && o.MinutosInicioSesion is > 0 and <= 30
+                        && o.MinutosCambioPassword is > 0 and <= 30
+                        && o.MaxIntentos is > 0 and <= 5 && o.MaxReenvios is >= 0 and <= 5
+                        && o.SegundosEntreReenvios > 0 && o.MaxCorreosPorHora > 0 && o.MaxFallosPorHora > 0
+                        && o.MaxRecuperacionesPorHora > 0 && o.MinutosPermisoRestablecer > 0,
+                "'Codigos' tiene valores fuera de rango (intentos y reenvíos: máximo 5, como en la base de datos).")
+            .ValidateOnStart();
+
         services.AddOptions<LimiteClimaOptions>()
             .Bind(configuration.GetSection(LimiteClimaOptions.Seccion))
             .Validate(o => o.PermitLimit > 0 && o.VentanaSegundos > 0,
@@ -62,8 +84,8 @@ public static class SeguridadServiceCollectionExtensions
 
         services.AddOptions<IntentosLoginOptions>()
             .Bind(configuration.GetSection(IntentosLoginOptions.Seccion))
-            .Validate(o => o.MaxFallidos > 0 && o.MinutosBloqueo > 0,
-                "'Seguridad:IntentosLogin' requiere MaxFallidos y MinutosBloqueo mayores que 0.")
+            .Validate(o => o.MaxFallidos > 0 && o.MinutosBloqueo > 0 && o.MaxFallidosCuenta >= o.MaxFallidos,
+                "'Seguridad:IntentosLogin' requiere MaxFallidos y MinutosBloqueo mayores que 0, y MaxFallidosCuenta mayor o igual que MaxFallidos.")
             .ValidateOnStart();
 
         services.AddOptions<CabecerasSeguridadOptions>()
@@ -82,6 +104,8 @@ public static class SeguridadServiceCollectionExtensions
         services.AddSingleton<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
         services.AddSingleton<JwtTokenService>();
         services.AddSingleton<LimitadorIntentosLogin>();
+        services.AddSingleton<TokenDesafio>();
+        services.AddSingleton<ControlEnvios>();
 
         // --- Autenticación JWT ------------------------------------------------------------
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
@@ -186,6 +210,12 @@ public static class SeguridadServiceCollectionExtensions
                 });
             });
 
+            // Autenticación segura (condición 2): registro, validación de códigos y reenvíos, cada uno por IP.
+            AgregarPolitica<LimiteRegistroOptions>(opciones, PoliticasSeguridad.RateLimitRegistro);
+            AgregarPolitica<LimiteCodigosOptions>(opciones, PoliticasSeguridad.RateLimitCodigos);
+            AgregarPolitica<LimiteReenvioOptions>(opciones, PoliticasSeguridad.RateLimitReenvio);
+            AgregarPolitica<LimiteRecuperacionOptions>(opciones, PoliticasSeguridad.RateLimitRecuperacion);
+
             // D-23: /api/clima/* comparte un límite por IP (protege la cuota de OpenWeather).
             opciones.AddPolicy(PoliticasSeguridad.RateLimitClima, http =>
             {
@@ -223,6 +253,33 @@ public static class SeguridadServiceCollectionExtensions
         return services;
     }
 
+    private static void AgregarLimite<T>(IServiceCollection services, IConfiguration configuration, string seccion)
+        where T : LimiteVentanaOptions
+    {
+        services.AddOptions<T>()
+            .Bind(configuration.GetSection(seccion))
+            .Validate(o => o.PermitLimit > 0 && o.VentanaSegundos > 0, $"'{seccion}' requiere PermitLimit y VentanaSegundos mayores que 0.")
+            .ValidateOnStart();
+    }
+
+    private static void AgregarPolitica<T>(RateLimiterOptions opciones, string politica)
+        where T : LimiteVentanaOptions
+    {
+        opciones.AddPolicy(politica, http =>
+        {
+            var limite = http.RequestServices.GetRequiredService<IOptions<T>>().Value;
+            var ip = http.Connection.RemoteIpAddress?.ToString() ?? "desconocida";
+
+            return RateLimitPartition.GetFixedWindowLimiter($"{politica}|{ip}", _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limite.PermitLimit,
+                Window = TimeSpan.FromSeconds(limite.VentanaSegundos),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            });
+        });
+    }
+
     private static JwtBearerEvents CrearEventosJwt() => new()
     {
         // 07-seguridad-inicial.md: los tokens de un usuario desactivado deben rechazarse.
@@ -245,17 +302,18 @@ public static class SeguridadServiceCollectionExtensions
             var estado = await db.Usuarios
                 .AsNoTracking()
                 .Where(u => u.IdUsuario == idUsuario)
-                .Select(u => new { u.Activo, u.Rol, u.PasswordHash })
+                .Select(u => new { u.Activo, u.Rol, u.SelloSeguridad })
                 .SingleOrDefaultAsync(contexto.HttpContext.RequestAborted);
 
-            // Fase 8 (A07): el sello del token debe coincidir con la contraseña actual; si cambió, la sesión se revoca.
+            // Fase 8 (A07) y migración 004: el sello del token debe coincidir con usuario.sello_seguridad; si se renovó
+            // (cambio o restablecimiento de contraseña, vinculación con Google), la sesión se revoca.
             var claveJwt = servicios.GetRequiredService<IOptions<JwtOptions>>().Value.Clave;
             var sello = contexto.Principal?.FindFirst(ClaimsClimaPlus.Sello)?.Value;
 
             string? motivo = estado is null ? "usuario_inexistente"
                 : !estado.Activo ? "cuenta_desactivada"
                 : !string.Equals(estado.Rol, rolToken, StringComparison.Ordinal) ? "rol_cambiado"
-                : !SelloSesion.Coincide(sello, estado.PasswordHash, claveJwt) ? "sesion_revocada"
+                : !SelloSesion.Coincide(sello, estado.SelloSeguridad, claveJwt) ? "sesion_revocada"
                 : null;
 
             if (motivo is not null)

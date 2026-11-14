@@ -35,10 +35,10 @@ public class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
             .HasMaxLength(150)
             .IsRequired();
 
+        // Migración 004: NULL en cuentas creadas con Google que aún no tienen contraseña local.
         builder.Property(u => u.PasswordHash)
             .HasColumnName("password_hash")
-            .HasMaxLength(255)
-            .IsRequired();
+            .HasMaxLength(255);
 
         builder.Property(u => u.Rol)
             .HasColumnName("rol")
@@ -57,6 +57,19 @@ public class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
             .HasColumnType("timestamp with time zone")
             .IsRequired()
             .HasDefaultValueSql("now()");
+
+        // Migración 004: las cuentas existentes quedan sin verificar (no hay evidencia de que lo estén).
+        builder.Property(u => u.CorreoVerificado)
+            .HasColumnName("correo_verificado")
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        // Migración 004: origen del sello "sv" del JWT; gen_random_uuid() da un valor distinto a cada fila existente.
+        builder.Property(u => u.SelloSeguridad)
+            .HasColumnName("sello_seguridad")
+            .HasColumnType("uuid")
+            .IsRequired()
+            .HasDefaultValueSql("gen_random_uuid()");
 
         // RN-BD-01: correo único.
         builder.HasIndex(u => u.Correo)

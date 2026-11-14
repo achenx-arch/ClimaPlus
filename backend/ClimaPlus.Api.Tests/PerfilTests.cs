@@ -90,21 +90,19 @@ public sealed class PerfilTests : IClassFixture<ClimaPlusApiFactory>
         var (correo, token) = await Ayudas.CrearUsuarioConSesionAsync(_cliente);
         const string nueva = "NuevaClave2027";
 
-        var conActualMala = await _cliente.SendAsync(Ayudas.ConToken(HttpMethod.Put, "/api/usuarios/me/password", token,
-            new { passwordActual = "Incorrecta2026", passwordNueva = nueva }));
+        var conActualMala = await Ayudas.SolicitarCambioPasswordAsync(_cliente, token, "Incorrecta2026", nueva);
         Assert.Equal(HttpStatusCode.BadRequest, conActualMala.StatusCode);
         Assert.True((await Ayudas.LeerProblemaAsync(conActualMala)).GetProperty("errors").TryGetProperty("passwordActual", out _));
 
-        var igualALaActual = await _cliente.SendAsync(Ayudas.ConToken(HttpMethod.Put, "/api/usuarios/me/password", token,
-            new { passwordActual = Ayudas.PasswordValida, passwordNueva = Ayudas.PasswordValida }));
+        var igualALaActual = await Ayudas.SolicitarCambioPasswordAsync(_cliente, token, Ayudas.PasswordValida, Ayudas.PasswordValida);
         Assert.Equal(HttpStatusCode.BadRequest, igualALaActual.StatusCode);
 
-        var correcta = await _cliente.SendAsync(Ayudas.ConToken(HttpMethod.Put, "/api/usuarios/me/password", token,
-            new { passwordActual = Ayudas.PasswordValida, passwordNueva = nueva }));
+        // Con la contraseña actual correcta llega un código; solo con él se cambia (migración 005).
+        var correcta = await Ayudas.CambiarPasswordConCodigoAsync(_cliente, token, correo, Ayudas.PasswordValida, nueva);
         Assert.Equal(HttpStatusCode.NoContent, correcta.StatusCode);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await Ayudas.LoginAsync(_cliente, correo)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Ayudas.LoginAsync(_cliente, correo, nueva)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Ayudas.IniciarSesionCompletaAsync(_cliente, correo, nueva)).StatusCode);
     }
 
     [Fact]

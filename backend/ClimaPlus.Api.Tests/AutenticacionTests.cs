@@ -24,39 +24,72 @@ public sealed class AutenticacionTests : IClassFixture<ClimaPlusApiFactory>
     }
 
     [Fact]
-    public async Task Registro_valido_devuelve_201_con_rol_USUARIO_y_sin_hash()
+    public async Task Registro_valido_devuelve_202_con_desafio_y_crea_cuenta_USUARIO_sin_verificar()
     {
         var correo = Ayudas.CorreoUnico();
 
         var respuesta = await Ayudas.RegistrarAsync(_cliente, correo.ToUpperInvariant(), nombre: "  Ana   López  ");
 
-        Assert.Equal(HttpStatusCode.Created, respuesta.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, respuesta.StatusCode);
         var texto = await respuesta.Content.ReadAsStringAsync();
         Assert.DoesNotContain("password", texto, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("hash", texto, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(correo, texto, StringComparison.OrdinalIgnoreCase);      // el destino va enmascarado
 
         var cuerpo = JsonSerializer.Deserialize<JsonElement>(texto);
-        Assert.Equal(Roles.Usuario, cuerpo.GetProperty("rol").GetString());
-        Assert.True(cuerpo.GetProperty("activo").GetBoolean());
-        Assert.Equal(correo, cuerpo.GetProperty("correo").GetString());          // normalizado a minúsculas
-        Assert.Equal("Ana López", cuerpo.GetProperty("nombre").GetString());     // espacios normalizados
+        Assert.False(cuerpo.TryGetProperty("token", out _));                           // no hay sesión
+        Assert.Equal(PropositosDesafio.VerificarCorreo, cuerpo.GetProperty("proposito").GetString());
+        Assert.Equal(string.Concat(correo.AsSpan(0, 1), "***", correo.AsSpan(correo.IndexOf('@'))),
+            cuerpo.GetProperty("destino").GetString());
+        Assert.Equal(60, cuerpo.GetProperty("reenviarEn").GetInt32());
+        Assert.False(string.IsNullOrWhiteSpace(cuerpo.GetProperty("desafio").GetString()));
+        var vigencia = cuerpo.GetProperty("expiraEn").GetDateTime().ToUniversalTime() - _fabrica.Reloj.GetUtcNow().UtcDateTime;
+        Assert.InRange(vigencia.TotalMinutes, 9.9, 10.1);
 
-        var guardado = await Ayudas.LeerUsuarioAsync(_fabrica, correo);
-        Assert.NotEqual(Ayudas.PasswordValida, guardado.PasswordHash);          // nunca en texto plano
+        var guardado = await Ayudas.LeerUsuarioAsync(_fabrica, correo);                // normalizado a minúsculas
+        Assert.Equal(Roles.Usuario, guardado.Rol);
+        Assert.True(guardado.Activo);
+        Assert.False(guardado.CorreoVerificado);
+        Assert.Equal("Ana López", guardado.Nombre);                                    // espacios normalizados
+        Assert.NotEqual(Ayudas.PasswordValida, guardado.PasswordHash);                 // nunca en texto plano
         Assert.False(string.IsNullOrWhiteSpace(guardado.PasswordHash));
+
+        var correoEnviado = await _fabrica.Correos.EsperarAsync(m => m.Destinatario == correo && m.Tipo == "codigo_verificar_correo");
+        Assert.Matches("^[0-9]{6}$", EnviadorCorreoFalso.ExtraerCodigo(correoEnviado));
     }
 
     [Fact]
-    public async Task Registro_con_correo_duplicado_en_otras_mayusculas_devuelve_409()
+    public async Task Registro_con_correo_duplicado_en_otras_mayusculas_responde_igual_y_solo_avisa_al_dueno()
     {
         var correo = Ayudas.CorreoUnico();
-        Assert.Equal(HttpStatusCode.Created, (await Ayudas.RegistrarAsync(_cliente, correo)).StatusCode);
+        await Ayudas.RegistrarYVerificarAsync(_cliente, correo);
+        var original = await Ayudas.LeerUsuarioAsync(_fabrica, correo);
 
-        var respuesta = await Ayudas.RegistrarAsync(_cliente, correo.ToUpperInvariant());
+        var respuesta = await Ayudas.RegistrarAsync(_cliente, correo.ToUpperInvariant(), "OtraClave2026", "Intruso");
 
-        Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
-        var problema = await Ayudas.LeerProblemaAsync(respuesta);
-        Assert.True(problema.GetProperty("errors").TryGetProperty("correo", out _));
+        // Misma forma que un registro nuevo: no revela que el correo existe.
+        Assert.Equal(HttpStatusCode.Accepted, respuesta.StatusCode);
+        var cuerpo = await respuesta.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(PropositosDesafio.VerificarCorreo, cuerpo.GetProperty("proposito").GetString());
+        Assert.True(cuerpo.TryGetProperty("destino", out _));
+        Assert.True(cuerpo.TryGetProperty("expiraEn", out _));
+        Assert.True(cuerpo.TryGetProperty("reenviarEn", out _));
+        var desafio = cuerpo.GetProperty("desafio").GetString()!;
+
+        // Al dueño le llega un aviso, nunca un código.
+        await _fabrica.Correos.EsperarAsync(m => m.Destinatario == correo && m.Tipo == "aviso_registro_existente");
+        Assert.Single(_fabrica.Correos.CodigosPara(correo));
+
+        // El señuelo no verifica nada ni cambia la cuenta.
+        var codigoReal = await _fabrica.Correos.EsperarCodigoAsync(correo);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Ayudas.VerificarCorreoAsync(_cliente, desafio, codigoReal)).StatusCode);
+        var despues = await Ayudas.LeerUsuarioAsync(_fabrica, correo);
+        Assert.Equal(original.PasswordHash, despues.PasswordHash);
+        Assert.Equal(original.Nombre, despues.Nombre);
+        Assert.Equal(original.SelloSeguridad, despues.SelloSeguridad);
+        Assert.True(despues.CorreoVerificado);
+        Assert.Equal(HttpStatusCode.OK, (await Ayudas.IniciarSesionCompletaAsync(_cliente, correo)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Ayudas.LoginAsync(_cliente, correo, "OtraClave2026")).StatusCode);
     }
 
     [Fact]
@@ -110,7 +143,8 @@ public sealed class AutenticacionTests : IClassFixture<ClimaPlusApiFactory>
         var correo = Ayudas.CorreoUnico();
         await Ayudas.RegistrarAsync(_cliente, correo);
 
-        var respuesta = await Ayudas.LoginAsync(_cliente, correo);
+        // Dos pasos: contraseña (202, sin token) y código del correo (200 con el JWT).
+        var respuesta = await Ayudas.IniciarSesionCompletaAsync(_cliente, correo);
 
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
         var cuerpo = await respuesta.Content.ReadFromJsonAsync<JsonElement>();

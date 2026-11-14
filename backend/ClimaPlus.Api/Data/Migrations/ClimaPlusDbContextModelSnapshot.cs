@@ -266,6 +266,105 @@ namespace ClimaPlus.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ClimaPlus.Api.Domain.Entities.DesafioAutenticacion", b =>
+                {
+                    b.Property<Guid>("IdDesafio")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id_desafio");
+
+                    b.Property<string>("CodigoHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("codigo_hash")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreadoEn")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("creado_en")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("EnviadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("enviado_en");
+
+                    b.Property<string>("Estado")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime>("ExpiraEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expira_en");
+
+                    b.Property<DateTime?>("FinalizadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finalizado_en");
+
+                    b.Property<long>("IdUsuario")
+                        .HasColumnType("bigint")
+                        .HasColumnName("id_usuario");
+
+                    b.Property<short>("Intentos")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0)
+                        .HasColumnName("intentos");
+
+                    b.Property<string>("Proposito")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("proposito");
+
+                    b.Property<short>("Reenvios")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0)
+                        .HasColumnName("reenvios");
+
+                    b.Property<string>("SujetoExterno")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("sujeto_externo");
+
+                    b.Property<DateTime?>("VerificadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verificado_en");
+
+                    b.HasKey("IdDesafio")
+                        .HasName("pk_desafio_autenticacion");
+
+                    b.HasIndex("IdUsuario", "Proposito")
+                        .IsUnique()
+                        .HasDatabaseName("uq_desafio_autenticacion_vivo")
+                        .HasFilter("estado IN ('PENDIENTE', 'VERIFICADO')");
+
+                    b.ToTable("desafio_autenticacion", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_desafio_autenticacion_codigo", "codigo_hash IS NOT NULL OR proposito = 'VINCULAR_GOOGLE'");
+
+                            t.HasCheckConstraint("ck_desafio_autenticacion_envio", "(codigo_hash IS NULL) = (enviado_en IS NULL)");
+
+                            t.HasCheckConstraint("ck_desafio_autenticacion_estado", "estado IN ('PENDIENTE', 'VERIFICADO', 'CONSUMIDO', 'ANULADO')");
+
+                            t.HasCheckConstraint("ck_desafio_autenticacion_finalizado", "estado NOT IN ('CONSUMIDO', 'ANULADO') OR finalizado_en IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_desafio_autenticacion_intentos", "intentos BETWEEN 0 AND 5");
+
+                            t.HasCheckConstraint("ck_desafio_autenticacion_proposito", "proposito IN ('VERIFICAR_CORREO', 'INICIO_SESION', 'INICIO_GOOGLE', 'VINCULAR_GOOGLE', 'RECUPERAR_PASSWORD', 'CAMBIAR_PASSWORD')");
+
+                            t.HasCheckConstraint("ck_desafio_autenticacion_reenvios", "reenvios BETWEEN 0 AND 5");
+
+                            t.HasCheckConstraint("ck_desafio_autenticacion_sujeto_externo", "(proposito = 'VINCULAR_GOOGLE') = (sujeto_externo IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_desafio_autenticacion_verificado", "estado <> 'VERIFICADO' OR (proposito = 'RECUPERAR_PASSWORD' AND verificado_en IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("ClimaPlus.Api.Domain.Entities.Dispositivo", b =>
                 {
                     b.Property<long>("IdDispositivo")
@@ -363,6 +462,64 @@ namespace ClimaPlus.Api.Data.Migrations
                         .HasDatabaseName("uq_favorito_usuario_ubicacion");
 
                     b.ToTable("favorito", (string)null);
+                });
+
+            modelBuilder.Entity("ClimaPlus.Api.Domain.Entities.IdentidadExterna", b =>
+                {
+                    b.Property<long>("IdIdentidad")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id_identidad");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("IdIdentidad"));
+
+                    b.Property<string>("CorreoProveedor")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("correo_proveedor");
+
+                    b.Property<DateTime>("FechaVinculacion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_vinculacion")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("IdUsuario")
+                        .HasColumnType("bigint")
+                        .HasColumnName("id_usuario");
+
+                    b.Property<string>("Proveedor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("proveedor");
+
+                    b.Property<string>("Sujeto")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("sujeto");
+
+                    b.HasKey("IdIdentidad")
+                        .HasName("pk_identidad_externa");
+
+                    b.HasIndex("IdUsuario", "Proveedor")
+                        .IsUnique()
+                        .HasDatabaseName("uq_identidad_externa_usuario_proveedor");
+
+                    b.HasIndex("Proveedor", "Sujeto")
+                        .IsUnique()
+                        .HasDatabaseName("uq_identidad_externa_proveedor_sujeto");
+
+                    b.ToTable("identidad_externa", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_identidad_externa_correo_minusculas", "correo_proveedor = lower(correo_proveedor)");
+
+                            t.HasCheckConstraint("ck_identidad_externa_proveedor", "proveedor IN ('GOOGLE')");
+
+                            t.HasCheckConstraint("ck_identidad_externa_sujeto_no_vacio", "char_length(btrim(sujeto)) > 0");
+                        });
                 });
 
             modelBuilder.Entity("ClimaPlus.Api.Domain.Entities.LecturaSensor", b =>
@@ -502,6 +659,12 @@ namespace ClimaPlus.Api.Data.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("correo");
 
+                    b.Property<bool>("CorreoVerificado")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("correo_verificado");
+
                     b.Property<DateTime>("FechaCreacion")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -515,7 +678,6 @@ namespace ClimaPlus.Api.Data.Migrations
                         .HasColumnName("nombre");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("password_hash");
@@ -527,6 +689,12 @@ namespace ClimaPlus.Api.Data.Migrations
                         .HasColumnType("character varying(20)")
                         .HasDefaultValue("USUARIO")
                         .HasColumnName("rol");
+
+                    b.Property<Guid>("SelloSeguridad")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("sello_seguridad")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.HasKey("IdUsuario")
                         .HasName("pk_usuario");
@@ -622,6 +790,18 @@ namespace ClimaPlus.Api.Data.Migrations
                     b.Navigation("Usuario");
                 });
 
+            modelBuilder.Entity("ClimaPlus.Api.Domain.Entities.DesafioAutenticacion", b =>
+                {
+                    b.HasOne("ClimaPlus.Api.Domain.Entities.Usuario", "Usuario")
+                        .WithMany("DesafiosAutenticacion")
+                        .HasForeignKey("IdUsuario")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_desafio_autenticacion_usuario");
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("ClimaPlus.Api.Domain.Entities.Dispositivo", b =>
                 {
                     b.HasOne("ClimaPlus.Api.Domain.Entities.Ubicacion", "Ubicacion")
@@ -660,6 +840,18 @@ namespace ClimaPlus.Api.Data.Migrations
                         .HasConstraintName("fk_favorito_usuario");
 
                     b.Navigation("Ubicacion");
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("ClimaPlus.Api.Domain.Entities.IdentidadExterna", b =>
+                {
+                    b.HasOne("ClimaPlus.Api.Domain.Entities.Usuario", "Usuario")
+                        .WithMany("IdentidadesExternas")
+                        .HasForeignKey("IdUsuario")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_identidad_externa_usuario");
 
                     b.Navigation("Usuario");
                 });
@@ -712,9 +904,13 @@ namespace ClimaPlus.Api.Data.Migrations
 
                     b.Navigation("ConsultasClima");
 
+                    b.Navigation("DesafiosAutenticacion");
+
                     b.Navigation("Dispositivos");
 
                     b.Navigation("Favoritos");
+
+                    b.Navigation("IdentidadesExternas");
                 });
 #pragma warning restore 612, 618
         }

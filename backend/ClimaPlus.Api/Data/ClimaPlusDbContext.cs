@@ -5,7 +5,8 @@ namespace ClimaPlus.Api.Data;
 
 /// <summary>
 /// Contexto de Entity Framework Core de ClimaPlus.
-/// Modelo aprobado: 8 tablas (docs/base-datos/modelo-relacional.puml y diccionario-datos.md).
+/// Modelo aprobado: 8 tablas de negocio (docs/base-datos/modelo-relacional.puml y diccionario-datos.md)
+/// más las 2 de autenticación de la migración 004 (desafio_autenticacion e identidad_externa).
 /// </summary>
 public class ClimaPlusDbContext : DbContext
 {
@@ -30,6 +31,10 @@ public class ClimaPlusDbContext : DbContext
 
     public DbSet<Alerta> Alertas => Set<Alerta>();
 
+    public DbSet<DesafioAutenticacion> DesafiosAutenticacion => Set<DesafioAutenticacion>();
+
+    public DbSet<IdentidadExterna> IdentidadesExternas => Set<IdentidadExterna>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -38,7 +43,7 @@ public class ClimaPlusDbContext : DbContext
         // (además, cada configuración lo declara explícitamente en su PK).
         modelBuilder.UseIdentityByDefaultColumns();
 
-        // Aplica las 8 clases IEntityTypeConfiguration de Data/Configurations.
+        // Aplica las 10 clases IEntityTypeConfiguration de Data/Configurations.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ClimaPlusDbContext).Assembly);
     }
 }

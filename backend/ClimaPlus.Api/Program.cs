@@ -1,3 +1,4 @@
+using ClimaPlus.Api.Correo;
 using ClimaPlus.Api.Data;
 using ClimaPlus.Api.Integraciones.OpenWeather;
 using ClimaPlus.Api.Security;
@@ -37,6 +38,7 @@ builder.Services.AddClimaPlusSeguridad(builder.Configuration);
 
 // Servicios de negocio (Fase 2D).
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ClimaPlus.Api.Services.Autenticacion.ServicioDesafios>();
 builder.Services.AddScoped<UsuarioService>();
 
 // OpenWeather (Fase 2E). La API key solo en User Secrets: OpenWeather:ApiKey.
@@ -66,6 +68,10 @@ builder.Services.AddScoped<IMotorAlertas, MotorAlertas>();
 builder.Services.AddScoped<DispositivoService>();
 builder.Services.AddScoped<LecturaService>();
 
+// Autenticación segura (fase 1): correos por una cola en segundo plano (MailKit; Mailpit en Docker local).
+builder.Services.AddCorreo(builder.Configuration);
+builder.Services.AddGoogle(builder.Configuration);
+
 // Fase 9: estado de la API y de la base de datos para Docker, CI y monitoreo (GET /health).
 builder.Services.AddHealthChecks().AddCheck<VerificacionBaseDatos>("postgresql");
 
@@ -89,7 +95,7 @@ builder.Services.AddSwaggerGen(opciones =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Pega solo el token devuelto por /api/auth/login.",
+        Description = "Pega solo el token devuelto por /api/auth/login/verificar (paso 2 del inicio de sesión).",
         Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" },
     };
     opciones.AddSecurityDefinition("Bearer", esquemaJwt);
@@ -114,6 +120,16 @@ var app = builder.Build();
 ObtenerCadenaConexion(app.Configuration);
 
 // Configure the HTTP request pipeline.
+// H-05: detrás de un proxy (Caddy/Nginx), la IP real del cliente y el esquema HTTPS vienen en X-Forwarded-*.
+// Va primero de todo, para que el rate limiting, los logs, HSTS y la redirección HTTPS vean al cliente real.
+// Se lee de app.Configuration (después de Build) para que las pruebas puedan reemplazarla.
+var opcionesProxy = ProxyInverso.CrearOpciones(
+    app.Configuration.GetSection(ProxyInversoOptions.Seccion).Get<ProxyInversoOptions>() ?? new ProxyInversoOptions());
+if (opcionesProxy is not null)
+{
+    app.UseForwardedHeaders(opcionesProxy);
+}
+
 // Fase 8 (A05): cabeceras de seguridad en todas las respuestas, incluidas las de error.
 app.UseCabecerasSeguridad();
 
@@ -146,6 +162,10 @@ app.MapControllers();
 
 // Público: solo responde Healthy/Unhealthy (503), sin detalles.
 app.MapHealthChecks("/health").AllowAnonymous();
+
+// Fase 7: si la base no tiene todas las migraciones (por ejemplo, falta la 004), lo deja claro en el log al arrancar.
+// Solo lee el historial de migraciones; nunca las aplica.
+await VerificacionBaseDatos.RegistrarMigracionesPendientesAsync(app.Services);
 
 // Administrador inicial (D-06): solo si AdminInicial está en User Secrets y no existe otro.
 await AdminSeeder.EjecutarAsync(app.Services);

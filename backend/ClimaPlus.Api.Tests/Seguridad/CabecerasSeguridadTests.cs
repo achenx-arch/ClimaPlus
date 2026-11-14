@@ -43,7 +43,12 @@ public sealed class CabecerasSeguridadTests : IClassFixture<ClimaPlusApiFactory>
         var correo = Ayudas.CorreoUnico();
         await Ayudas.RegistrarAsync(_cliente, correo);
 
-        var respuesta = await Ayudas.LoginAsync(_cliente, correo);
+        var paso1 = await Ayudas.LoginAsync(_cliente, correo);
+        Assert.Equal(HttpStatusCode.Accepted, paso1.StatusCode);
+        AssertCabecerasBasicas(paso1);
+        Assert.True(paso1.Headers.CacheControl?.NoStore);       // lleva el token del desafío
+
+        var respuesta = await Ayudas.IniciarSesionCompletaAsync(_cliente, correo);
 
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
         AssertCabecerasBasicas(respuesta);

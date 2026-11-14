@@ -27,6 +27,30 @@ import {
 import { conSesion, renderizar } from "./renderizar";
 import { crearServidor, problema } from "./servidorFalso";
 
+const desafioCambio = () => ({
+  status: 202,
+  cuerpo: {
+    desafio: "desafio.cambio",
+    proposito: "CAMBIAR_PASSWORD",
+    destino: "a***@ejemplo.com",
+    expiraEn: new Date(Date.now() + 300_000).toISOString(),
+    reenviarEn: 60,
+  },
+});
+
+async function llenarCambioPassword(
+  usuarioEvento: ReturnType<typeof userEvent.setup>,
+  actual: string,
+  nueva = "NuevaClave2027",
+  confirmacion = nueva
+) {
+  await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar contraseña" }));
+  await usuarioEvento.type(screen.getByLabelText("Contraseña actual"), actual);
+  await usuarioEvento.type(screen.getByLabelText("Nueva contraseña"), nueva);
+  await usuarioEvento.type(screen.getByLabelText("Confirmar nueva contraseña"), confirmacion);
+  await usuarioEvento.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Continuar" }));
+}
+
 function servidorConSesion(u = usuario, nuevas = 0) {
   const servidor = crearServidor();
   conSesion(servidor, u, nuevas);
@@ -405,45 +429,107 @@ describe("M16 – perfil", () => {
     expect(screen.getAllByText("Ana María López").length).toBeGreaterThan(0);
   });
 
-  it("cambia la contraseña con PUT /api/usuarios/me/password y muestra el error del campo", async () => {
+  it("paso 1 del cambio de contraseña: POST /cambio con confirmación y muestra el error del campo", async () => {
     const servidor = servidorConSesion()
       .en("GET", "/api/usuarios/me", { cuerpo: usuario })
-      .en("PUT", "/api/usuarios/me/password", problema(400, "x", { passwordActual: ["La contraseña actual no es correcta."] }));
+      .en("POST", "/api/usuarios/me/password/cambio", problema(400, "x", { passwordActual: ["La contraseña actual no es correcta."] }));
     renderizar(<UserProfile />, { ruta: "/perfil" });
     const usuarioEvento = userEvent.setup();
 
-    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar contraseña" }));
-    await usuarioEvento.type(screen.getByLabelText("Contraseña actual"), "Mala2026");
-    await usuarioEvento.type(screen.getByLabelText("Nueva contraseña"), "NuevaClave2027");
-    await usuarioEvento.type(screen.getByLabelText("Confirmar nueva contraseña"), "NuevaClave2027");
-    await usuarioEvento.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cambiar contraseña" }));
+    await llenarCambioPassword(usuarioEvento, "Mala2026");
 
     expect(await screen.findByText("La contraseña actual no es correcta.")).toBeInTheDocument();
-    expect(servidor.a("/api/usuarios/me/password", "PUT")[0].cuerpo).toEqual({
+    expect(servidor.a("/api/usuarios/me/password/cambio", "POST")[0].cuerpo).toEqual({
       passwordActual: "Mala2026",
       passwordNueva: "NuevaClave2027",
+      confirmacion: "NuevaClave2027",
     });
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")).toHaveLength(0);
+    expect(screen.queryByLabelText("Código de verificación")).not.toBeInTheDocument();
+  });
+
+  it("valida en el navegador que la confirmación coincida antes de llamar a la API", async () => {
+    const servidor = servidorConSesion().en("GET", "/api/usuarios/me", { cuerpo: usuario });
+    renderizar(<UserProfile />, { ruta: "/perfil" });
+    const usuarioEvento = userEvent.setup();
+
+    await llenarCambioPassword(usuarioEvento, "Actual2026", "NuevaClave2027", "OtraClave2027");
+
+    expect(await screen.findByText("Las contraseñas nuevas no coinciden.")).toBeInTheDocument();
+    expect(servidor.a("/api/usuarios/me/password/cambio", "POST")).toHaveLength(0);
+  });
+
+  it("un código incorrecto en el paso 2 muestra el error y no cierra la sesión", async () => {
+    const servidor = servidorConSesion()
+      .en("GET", "/api/usuarios/me", { cuerpo: usuario })
+      .en("POST", "/api/usuarios/me/password/cambio", desafioCambio())
+      .en(
+        "POST",
+        "/api/usuarios/me/password/cambio/verificar",
+        problema(400, "x", { codigo: ["El código no es válido o ya venció. Revisa tu correo o pide uno nuevo."] })
+      );
+    renderizar(<UserProfile />, { ruta: "/perfil" });
+    const usuarioEvento = userEvent.setup();
+
+    await llenarCambioPassword(usuarioEvento, "Actual2026");
+    await usuarioEvento.type(await screen.findByLabelText("Código de verificación"), "111111");
+    await usuarioEvento.click(screen.getByRole("button", { name: /Confirmar cambio/ }));
+
+    expect(await screen.findByText(/El código no es válido o ya venció/)).toBeInTheDocument();
+    expect(sessionStorage.getItem(CLAVE_SESION)).not.toBeNull();
+    expect(screen.getByTestId("ruta")).toHaveTextContent("/perfil");
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")).toHaveLength(1);
+  });
+
+  it("Volver desde la pantalla del código regresa al formulario sin cambiar nada", async () => {
+    const servidor = servidorConSesion()
+      .en("GET", "/api/usuarios/me", { cuerpo: usuario })
+      .en("POST", "/api/usuarios/me/password/cambio", desafioCambio());
+    renderizar(<UserProfile />, { ruta: "/perfil" });
+    const usuarioEvento = userEvent.setup();
+
+    await llenarCambioPassword(usuarioEvento, "Actual2026");
+    await screen.findByLabelText("Código de verificación");
+    await usuarioEvento.click(screen.getByRole("button", { name: "Volver" }));
+
+    expect(await screen.findByLabelText("Contraseña actual")).toBeInTheDocument();
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")).toHaveLength(0);
   });
 });
 
 describe("seguridad – Fase 8", () => {
-  it("al cambiar la contraseña cierra la sesión porque el backend revoca los tokens", async () => {
+  it("cambia la contraseña solo con el código del correo y después cierra la sesión", async () => {
     const servidor = servidorConSesion()
       .en("GET", "/api/usuarios/me", { cuerpo: usuario })
-      .en("PUT", "/api/usuarios/me/password", { status: 204 });
+      .en("POST", "/api/usuarios/me/password/cambio", desafioCambio())
+      .en("POST", "/api/usuarios/me/password/cambio/verificar", { status: 204 });
     renderizar(<UserProfile />, { ruta: "/perfil" });
     const usuarioEvento = userEvent.setup();
 
-    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar contraseña" }));
-    await usuarioEvento.type(screen.getByLabelText("Contraseña actual"), "Actual2026");
-    await usuarioEvento.type(screen.getByLabelText("Nueva contraseña"), "NuevaClave2027");
-    await usuarioEvento.type(screen.getByLabelText("Confirmar nueva contraseña"), "NuevaClave2027");
-    await usuarioEvento.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cambiar contraseña" }));
+    await llenarCambioPassword(usuarioEvento, "Actual2026");
+
+    // Paso 1: todavía no se cambió nada y la sesión sigue abierta.
+    expect(await screen.findByText(/te enviamos un código de 6 dígitos a/)).toBeInTheDocument();
+    expect(screen.getByText("a***@ejemplo.com")).toBeInTheDocument();
+    expect(sessionStorage.getItem(CLAVE_SESION)).not.toBeNull();
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")).toHaveLength(0);
+
+    // Paso 2: con el código se confirma el cambio.
+    await usuarioEvento.type(screen.getByLabelText("Código de verificación"), "482913");
+    await usuarioEvento.click(screen.getByRole("button", { name: /Confirmar cambio/ }));
 
     await waitFor(() => expect(screen.getByTestId("ruta")).toHaveTextContent("/login"));
     expect(screen.getByText("Pantalla de inicio de sesión")).toBeInTheDocument();
     expect(sessionStorage.getItem(CLAVE_SESION)).toBeNull();
-    expect(servidor.a("/api/usuarios/me/password", "PUT")).toHaveLength(1);
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")[0].cuerpo).toEqual({
+      desafio: "desafio.cambio",
+      codigo: "482913",
+      passwordActual: "Actual2026",
+      passwordNueva: "NuevaClave2027",
+      confirmacion: "NuevaClave2027",
+    });
+    // El endpoint antiguo (PUT sin código) ya no se usa.
+    expect(servidor.a("/api/usuarios/me/password", "PUT")).toHaveLength(0);
   });
 });
 

@@ -139,8 +139,14 @@ public sealed class ConsultaClimaPostgreSqlTests : IClassFixture<BaseDatosPrueba
             return filas;
         }
 
+        // Las 5 migraciones oficiales, en orden: 001 a 003 (este archivo), 004 autenticación segura y 005 cambio de
+        // contraseña con código (su esquema se comprueba en AutenticacionPostgreSqlTests).
         Assert.Equal(
-            new[] { "20261016052608_InitialCreate", "20261028062000_ConsultaClimaUsuarioOpcional", "20261028062100_ConsultaClimaDetalle" },
+            new[]
+            {
+                "20261016052608_InitialCreate", "20261028062000_ConsultaClimaUsuarioOpcional", "20261028062100_ConsultaClimaDetalle",
+                ModeloAutenticacionTests.AutenticacionSegura, ModeloAutenticacionTests.CambioPassword,
+            },
             await LeerAsync("SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY \"MigrationId\""));
 
         Assert.Equal(
@@ -161,8 +167,13 @@ public sealed class ConsultaClimaPostgreSqlTests : IClassFixture<BaseDatosPrueba
             },
             await LeerAsync("SELECT conname FROM pg_constraint WHERE conrelid = 'consulta_clima'::regclass AND contype = 'c' ORDER BY conname"));
 
+        // Las 8 tablas de negocio siguen presentes; la 004 agrega desafio_autenticacion e identidad_externa.
         Assert.Equal(
-            new[] { "alerta", "configuracion_alerta", "consulta_clima", "dispositivo", "favorito", "lectura_sensor", "ubicacion", "usuario" },
+            new[]
+            {
+                "alerta", "configuracion_alerta", "consulta_clima", "desafio_autenticacion", "dispositivo", "favorito",
+                "identidad_externa", "lectura_sensor", "ubicacion", "usuario",
+            },
             await LeerAsync("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() " +
                             "AND table_type = 'BASE TABLE' AND table_name <> '__EFMigrationsHistory' ORDER BY table_name"));
     }

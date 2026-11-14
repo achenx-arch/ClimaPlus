@@ -2,7 +2,6 @@ using ClimaPlus.Api.Data;
 using ClimaPlus.Api.Domain.Entities;
 using ClimaPlus.Api.DTOs.Usuarios;
 using ClimaPlus.Api.Security;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClimaPlus.Api.Services;
@@ -10,20 +9,22 @@ namespace ClimaPlus.Api.Services;
 /// <summary>
 /// Perfil propio (M16, M17 – enmienda E-01). Siempre opera sobre el usuario del token:
 /// no existe forma de consultar ni modificar el perfil de otra persona.
-/// Nunca cambia rol ni estado (RN-BD-37, RN-BD-38).
+/// Nunca cambia rol ni estado (RN-BD-37, RN-BD-38). El cambio de contraseña, con código por correo, está en
+/// AuthService.CambioPassword.cs (migración 005).
 /// </summary>
 public sealed class UsuarioService
 {
     private readonly ClimaPlusDbContext _db;
-    private readonly IPasswordHasher<Usuario> _hasher;
     private readonly ILogger _log;
 
-    public UsuarioService(ClimaPlusDbContext db, IPasswordHasher<Usuario> hasher, ILoggerFactory logs)
+    public UsuarioService(ClimaPlusDbContext db, ILoggerFactory logs)
     {
         _db = db;
-        _hasher = hasher;
         _log = logs.CreateLogger(RegistroSeguridad.Categoria);
     }
+
+    private Task<bool> TieneGoogleAsync(long idUsuario, CancellationToken cancelacion) =>
+        _db.IdentidadesExternas.AnyAsync(i => i.IdUsuario == idUsuario, cancelacion);
 
     public async Task<Resultado<UsuarioResponse>> ObtenerAsync(long idUsuario, CancellationToken cancelacion)
     {
@@ -31,7 +32,7 @@ public sealed class UsuarioService
 
         return usuario is null
             ? Resultado<UsuarioResponse>.Falla(NoEncontrado())
-            : Resultado<UsuarioResponse>.Ok(UsuarioResponse.Desde(usuario));
+            : Resultado<UsuarioResponse>.Ok(UsuarioResponse.Desde(usuario, await TieneGoogleAsync(idUsuario, cancelacion)));
     }
 
     public async Task<Resultado<UsuarioResponse>> ActualizarAsync(long idUsuario, ActualizarPerfilRequest solicitud, CancellationToken cancelacion)
@@ -64,34 +65,7 @@ public sealed class UsuarioService
         }
 
         _log.LogInformation("Seguridad: perfil_actualizado idUsuario={IdUsuario} correoCambiado={CorreoCambiado}", idUsuario, cambiaCorreo);
-        return Resultado<UsuarioResponse>.Ok(UsuarioResponse.Desde(usuario));
-    }
-
-    public async Task<Resultado> CambiarPasswordAsync(long idUsuario, CambiarPasswordRequest solicitud, string ip, CancellationToken cancelacion)
-    {
-        var usuario = await _db.Usuarios.SingleOrDefaultAsync(u => u.IdUsuario == idUsuario, cancelacion);
-        if (usuario is null)
-        {
-            return Resultado.Falla(NoEncontrado());
-        }
-
-        if (_hasher.VerifyHashedPassword(usuario, usuario.PasswordHash, solicitud.PasswordActual) == PasswordVerificationResult.Failed)
-        {
-            _log.LogWarning("Seguridad: cambio_password_fallido motivo=password_actual idUsuario={IdUsuario} ip={Ip}", idUsuario, ip);
-            return Resultado.Falla(new ErrorServicio(TipoError.Validacion, "La contraseña actual es incorrecta.", "passwordActual"));
-        }
-
-        if (string.Equals(solicitud.PasswordActual, solicitud.PasswordNueva, StringComparison.Ordinal))
-        {
-            return Resultado.Falla(new ErrorServicio(TipoError.Validacion,
-                "La nueva contraseña debe ser distinta de la actual.", "passwordNueva"));
-        }
-
-        usuario.PasswordHash = _hasher.HashPassword(usuario, solicitud.PasswordNueva);
-        await _db.SaveChangesAsync(cancelacion);
-
-        _log.LogInformation("Seguridad: password_cambiada idUsuario={IdUsuario} ip={Ip}", idUsuario, ip);
-        return Resultado.Ok();
+        return Resultado<UsuarioResponse>.Ok(UsuarioResponse.Desde(usuario, await TieneGoogleAsync(idUsuario, cancelacion)));
     }
 
     private static ErrorServicio NoEncontrado() =>

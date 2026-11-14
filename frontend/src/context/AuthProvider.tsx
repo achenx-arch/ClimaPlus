@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { alExpirarSesion, cancelarSolicitudesDeSesion, establecerToken } from "../services/apiClient";
 import * as auth from "../services/authService";
 import { limpiarPeticionesClima } from "../services/climaService";
-import type { Usuario } from "../types/api";
+import type { LoginResponse, Usuario } from "../types/api";
 import { AuthContext, type EstadoSesion, type ValorAuth } from "./auth";
 
 // Sesión (contrato-auth-perfil.md, secciones 6 y 7):
@@ -135,8 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(temporizador);
   }, [expiraEn, terminarSesion]);
 
-  const iniciarSesion = useCallback(async (correo: string, password: string, recordar: boolean) => {
-    const respuesta = await auth.iniciarSesion({ correo, password });
+  /**
+   * Abre la sesión con una respuesta del backend que ya trae el JWT (login paso 2, Google o un JWT nuevo).
+   * Es el único lugar donde se establece el token.
+   */
+  const establecerSesion = useCallback((respuesta: LoginResponse, recordar: boolean) => {
     restaurando.current = false;
     establecerToken(respuesta.token);
     try {
@@ -154,6 +157,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEstado("autenticado");
     return respuesta.usuario;
   }, []);
+
+  // Paso 1: solo devuelve el desafío. No toca el token ni el estado de la sesión.
+  const iniciarSesion = useCallback(
+    (correo: string, password: string) => auth.iniciarSesion({ correo, password }),
+    []
+  );
+
+  const completarInicioSesion = useCallback(async (desafio: string, codigo: string, recordar: boolean) => {
+    const respuesta = await auth.verificarInicioSesion({ desafio, codigo });
+    return establecerSesion(respuesta, recordar);
+  }, [establecerSesion]);
+
+  const iniciarSesionConGoogle = useCallback(async (credencial: string, recordar: boolean) => {
+    const respuesta = await auth.iniciarSesionGoogle(credencial);
+    return establecerSesion(respuesta, recordar);
+  }, [establecerSesion]);
+
+  const reemplazarSesion = useCallback((respuesta: LoginResponse) => {
+    let recordada: boolean;
+    try {
+      recordada = sessionStorage.getItem(CLAVE_SESION) !== null;
+    } catch {
+      recordada = false;
+    }
+    establecerSesion(respuesta, recordada);
+  }, [establecerSesion]);
 
   const cerrarSesion = useCallback(() => {
     // El backend no tiene endpoint de logout: los JWT no se guardan en el servidor (D-01),
@@ -177,12 +206,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       esAdministrador: usuario?.rol === "ADMINISTRADOR",
       mensajeSesion,
       iniciarSesion,
+      completarInicioSesion,
+      iniciarSesionConGoogle,
+      reemplazarSesion,
       cerrarSesion,
       cerrarSesionConMensaje,
       actualizarUsuario: setUsuario,
       limpiarMensajeSesion: () => setMensajeSesion(null),
     }),
-    [estado, usuario, mensajeSesion, iniciarSesion, cerrarSesion, cerrarSesionConMensaje]
+    [estado, usuario, mensajeSesion, iniciarSesion, completarInicioSesion, iniciarSesionConGoogle, reemplazarSesion,
+      cerrarSesion, cerrarSesionConMensaje]
   );
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;

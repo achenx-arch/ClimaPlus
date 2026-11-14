@@ -1,9 +1,16 @@
 # ClimaPlus API – Fase 2D (autenticación y perfil)
 # Datos de ejemplo: NO usar credenciales reales en este archivo.
-# 1) Ejecuta "Registrar", 2) "Iniciar sesión", 3) copia el token en @token.
+# Autenticación segura: los códigos de 6 dígitos llegan por correo (en local, Mailpit: http://localhost:8025).
+# 1) "Registrar" y copia "desafio" en @desafio; 2) "Verificar correo" con el código;
+# 3) "Iniciar sesión" y copia el nuevo "desafio"; 4) "Iniciar sesión (código)" y copia el token en @token.
 
 @ClimaPlus.Api_HostAddress = http://localhost:5208
 @token = PEGA_AQUI_EL_TOKEN
+@desafio = PEGA_AQUI_EL_DESAFIO
+@codigo = 000000
+@permiso = PEGA_AQUI_EL_PERMISO
+# ID token ("credential") que Google entrega al navegador; se obtiene con docs/herramientas/prueba-google.html
+@credencialGoogle = PEGA_AQUI_EL_ID_TOKEN_DE_GOOGLE
 
 ### Registrar
 POST {{ClimaPlus.Api_HostAddress}}/api/auth/register
@@ -15,13 +22,39 @@ Content-Type: application/json
   "password": "Ejemplo2026"
 }
 
-### Iniciar sesión
+### Verificar correo (código recibido al registrarse)
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/verificar-correo
+Content-Type: application/json
+
+{
+  "desafio": "{{desafio}}",
+  "codigo": "{{codigo}}"
+}
+
+### Reenviar código (uno cada 60 s, máximo 5 por desafío)
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/reenviar-codigo
+Content-Type: application/json
+
+{
+  "desafio": "{{desafio}}"
+}
+
+### Iniciar sesión, paso 1: contraseña (202 con el desafío; envía el código al correo)
 POST {{ClimaPlus.Api_HostAddress}}/api/auth/login
 Content-Type: application/json
 
 {
   "correo": "ana.lopez@ejemplo.com",
   "password": "Ejemplo2026"
+}
+
+### Iniciar sesión, paso 2: código (200 con el token)
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/login/verificar
+Content-Type: application/json
+
+{
+  "desafio": "{{desafio}}",
+  "codigo": "{{codigo}}"
 }
 
 ### Sesión actual
@@ -53,15 +86,104 @@ Content-Type: application/json
   "rol": "ADMINISTRADOR"
 }
 
-### Cambiar contraseña
-PUT {{ClimaPlus.Api_HostAddress}}/api/usuarios/me/password
+### Cambiar contraseña, paso 1 (202: envía un código CAMBIAR_PASSWORD al correo; todavía no cambia nada)
+POST {{ClimaPlus.Api_HostAddress}}/api/usuarios/me/password/cambio
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "passwordActual": "Ejemplo2026",
-  "passwordNueva": "NuevaClave2026"
+  "passwordNueva": "NuevaClave2026",
+  "confirmacion": "NuevaClave2026"
+}
+
+### Cambiar contraseña, paso 2 (204: cambia la contraseña y cierra todas las sesiones)
+POST {{ClimaPlus.Api_HostAddress}}/api/usuarios/me/password/cambio/verificar
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "desafio": "{{desafio}}",
+  "codigo": "000000",
+  "passwordActual": "Ejemplo2026",
+  "passwordNueva": "NuevaClave2026",
+  "confirmacion": "NuevaClave2026"
 }
 
 ### Sin token (debe responder 401)
 GET {{ClimaPlus.Api_HostAddress}}/api/usuarios/me
+
+### Recuperar contraseña, paso 1: solicitar (202 siempre; el código llega solo si la cuenta existe y está activa)
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/password/solicitar
+Content-Type: application/json
+
+{
+  "correo": "ana.lopez@ejemplo.com"
+}
+
+### Recuperar contraseña, paso 2: verificar el código (200 con "permiso"; copia el permiso en @permiso)
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/password/verificar
+Content-Type: application/json
+
+{
+  "desafio": "{{desafio}}",
+  "codigo": "{{codigo}}"
+}
+
+### Recuperar contraseña, paso 3: restablecer (204; cierra todas las sesiones)
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/password/restablecer
+Content-Type: application/json
+
+{
+  "permiso": "{{permiso}}",
+  "passwordNueva": "NuevaClave2027",
+  "confirmacion": "NuevaClave2027"
+}
+
+### Establecer contraseña (solo cuentas creadas con Google; 202 con desafío, luego pasos 2 y 3)
+POST {{ClimaPlus.Api_HostAddress}}/api/usuarios/me/password/establecer
+Authorization: Bearer {{token}}
+
+### Google, paso 1: nonce y Client ID (503 si Google no está configurado)
+GET {{ClimaPlus.Api_HostAddress}}/api/auth/google/iniciar?uso=login
+
+### Google, paso 2: entrar con el ID token (200 con el token de ClimaPlus; sin código por correo)
+POST {{ClimaPlus.Api_HostAddress}}/api/auth/google
+Content-Type: application/json
+
+{
+  "credencial": "{{credencialGoogle}}"
+}
+
+### Vincular Google, nonce de vinculación (con sesión)
+GET {{ClimaPlus.Api_HostAddress}}/api/auth/google/iniciar?uso=vincular
+Authorization: Bearer {{token}}
+
+### Vincular Google, paso 1 (202 con desafío; código al correo de la cuenta)
+POST {{ClimaPlus.Api_HostAddress}}/api/usuarios/me/google/vincular
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "credencial": "{{credencialGoogle}}",
+  "passwordActual": "Ejemplo2026"
+}
+
+### Vincular Google, paso 2 (200 con un token nuevo)
+POST {{ClimaPlus.Api_HostAddress}}/api/usuarios/me/google/vincular/verificar
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "desafio": "{{desafio}}",
+  "codigo": "{{codigo}}"
+}
+
+### Desvincular Google (200 con un token nuevo; 409 si la cuenta no tiene contraseña)
+POST {{ClimaPlus.Api_HostAddress}}/api/usuarios/me/google/desvincular
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "passwordActual": "Ejemplo2026"
+}

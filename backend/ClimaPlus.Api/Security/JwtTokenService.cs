@@ -40,7 +40,7 @@ public sealed class JwtTokenService
             {
                 new Claim(ClaimsClimaPlus.Sujeto, usuario.IdUsuario.ToString(CultureInfo.InvariantCulture)),
                 new Claim(ClaimsClimaPlus.Rol, usuario.Rol),
-                new Claim(ClaimsClimaPlus.Sello, SelloSesion.Calcular(usuario.PasswordHash, jwt.Clave)),
+                new Claim(ClaimsClimaPlus.Sello, SelloSesion.Calcular(usuario.SelloSeguridad, jwt.Clave)),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             }),
             SigningCredentials = new SigningCredentials(
