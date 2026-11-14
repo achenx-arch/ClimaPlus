@@ -551,6 +551,12 @@
     flex-basis: 100%;
   }
 
+  /* Con el botón debajo, la lupa queda centrada en el campo (46 px de alto). */
+  .admin-users-search-box > i {
+    top: 23px;
+    transform: translateY(-50%);
+  }
+
   .admin-users-search-box button {
     width: 100%;
   }

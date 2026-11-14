@@ -20,7 +20,7 @@ const MODULOS = [
     descripcion: "Listar, cambiar rol y activar o desactivar cuentas (RF-26 a RF-28).",
     icono: "bi-people",
     ruta: "/admin/usuarios",
-    disponible: false,
+    disponible: true,
   },
   {
     titulo: "Estadísticas (M13)",
@@ -39,7 +39,7 @@ const MODULOS = [
 ];
 
 // M13 – Panel administrativo. Solo muestra datos reales disponibles: las alertas del sistema
-// (GET /api/admin/alertas). Usuarios, estadísticas y dispositivos no tienen endpoints todavía.
+// (GET /api/admin/alertas). La gestión de usuarios está en M14; estadísticas y dispositivos no tienen endpoints todavía.
 export default function AdminDashboard() {
   const resumen = useConsulta("admin-panel", async (signal) => {
     const [todas, nuevas, leidas] = await Promise.all([
@@ -110,8 +110,8 @@ export default function AdminDashboard() {
             <i className="bi bi-info-circle"></i>
 
             <span>
-              Los conteos de usuarios, consultas y dispositivos llegarán con los módulos
-              pendientes (RF-25 a RF-28 y dispositivos). No se muestran cifras de ejemplo.
+              Los conteos de consultas y dispositivos llegarán con los módulos pendientes (RF-25 y
+              dispositivos). No se muestran cifras de ejemplo.
             </span>
           </div>
 

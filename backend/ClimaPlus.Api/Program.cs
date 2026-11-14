@@ -61,6 +61,9 @@ builder.Services.AddScoped<ConfiguracionAlertaService>();
 // Alertas generadas: consulta y estado (M09, M15).
 builder.Services.AddScoped<AlertaService>();
 
+// Gestión de usuarios del administrador (M14, RF-26 a RF-28)
+builder.Services.AddScoped<ClimaPlus.Api.Services.Admin.UsuarioAdminService>();
+
 // Motor de alertas (Fase 2H, RF-16): se ejecuta dentro de GET /api/clima/actual, sin tareas en segundo plano (D-02).
 builder.Services.AddScoped<IMotorAlertas, MotorAlertas>();
 

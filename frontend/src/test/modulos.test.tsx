@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import Navbar from "../components/Navbar";
 import AdminAlerts from "../pages/AdminAlerts";
+import AdminUsers from "../pages/AdminUsers";
 import AlertSettings from "../pages/AlertSettings";
 import Alerts from "../pages/Alerts";
 import Favorites from "../pages/Favorites";
@@ -408,6 +409,135 @@ describe("M15 – alertas del sistema (administrador)", () => {
     const dialogo = await screen.findByRole("dialog");
     expect(await within(dialogo).findByText(/ana.lopez@ejemplo.com/)).toBeInTheDocument();
     expect(within(dialogo).queryByRole("button", { name: /Marcar como leída/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("M14 – gestión de usuarios (administrador)", () => {
+  const ana = usuario;
+  const luis = { ...usuario, idUsuario: 13, nombre: "Luis Pérez", correo: "luis@ejemplo.com", activo: false, tieneGoogle: true, tienePassword: false };
+
+  function servidorUsuarios() {
+    return servidorConSesion(administrador).en("GET", "/api/admin/usuarios", (p) => {
+      const estado = p.url.searchParams.get("estado");
+      const lista = [administrador, ana, luis].filter(
+        (u) => estado === null || (estado === "ACTIVO") === u.activo
+      );
+      return { cuerpo: pagina(lista, { totalElementos: lista.length }) };
+    });
+  }
+
+  it("RF-26: lista, contadores y búsqueda/filtros enviados al servidor; sin datos sensibles ni borrado", async () => {
+    const servidor = servidorUsuarios();
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    expect(await screen.findByText("ana.lopez@ejemplo.com")).toBeInTheDocument();
+    expect(await screen.findByText("3 registrados · 2 activos · 1 inactivos")).toBeInTheDocument();
+    expect(screen.getByText("Inactivo")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Eliminar/ })).not.toBeInTheDocument();
+    // En la fila propia no hay acciones de rol ni de estado.
+    expect(screen.queryByRole("button", { name: "Cambiar rol de Admin ClimaPlus" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desactivar a Admin ClimaPlus" })).not.toBeInTheDocument();
+    expect(screen.getByText("Tu cuenta")).toBeInTheDocument();
+
+    await usuarioEvento.type(screen.getByLabelText("Buscar usuario"), "  luis  ");
+    await usuarioEvento.click(screen.getByRole("button", { name: "Buscar" }));
+    await waitFor(() =>
+      expect(servidor.a("/api/admin/usuarios").some((p) => p.url.searchParams.get("busqueda") === "luis")).toBe(true)
+    );
+    await usuarioEvento.selectOptions(screen.getByLabelText("Rol"), "ADMINISTRADOR");
+    await usuarioEvento.click(screen.getByRole("button", { name: "Inactivos" }));
+    await waitFor(() =>
+      expect(
+        servidor
+          .a("/api/admin/usuarios")
+          .some(
+            (p) =>
+              p.url.searchParams.get("busqueda") === "luis" &&
+              p.url.searchParams.get("rol") === "ADMINISTRADOR" &&
+              p.url.searchParams.get("estado") === "INACTIVO" &&
+              p.url.searchParams.get("pagina") === "1"
+          )
+      ).toBe(true)
+    );
+    expect(servidor.a("/api/admin/usuarios").every((p) => p.encabezados.authorization !== undefined)).toBe(true);
+  });
+
+  it("RF-27: cambia el rol con confirmación y avisa que se cierran las sesiones", async () => {
+    const servidor = servidorUsuarios().en("PATCH", "/api/admin/usuarios/12/rol", {
+      cuerpo: { ...ana, rol: "ADMINISTRADOR" },
+    });
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar rol de Ana López" }));
+    const dialogo = screen.getByRole("dialog", { name: "Cambiar rol" });
+    expect(within(dialogo).getByText(/Se cerrarán todas las sesiones/)).toBeInTheDocument();
+    expect(within(dialogo).getByRole("button", { name: "Guardar rol" })).toBeDisabled();   // mismo rol
+    await usuarioEvento.click(within(dialogo).getByLabelText("Administrador"));
+    await usuarioEvento.click(within(dialogo).getByRole("button", { name: "Guardar rol" }));
+
+    expect(await screen.findByText("Ana López ahora tiene el rol Administrador.")).toBeInTheDocument();
+    expect(servidor.a("/api/admin/usuarios/12/rol", "PATCH")[0].cuerpo).toEqual({ rol: "ADMINISTRADOR" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("RF-27/RN-BD-09: muestra el error 409 del servidor sin cerrar la ventana", async () => {
+    servidorUsuarios().en(
+      "PATCH",
+      "/api/admin/usuarios/13/rol",
+      problema(409, "Es el último administrador activo: no se puede degradar (RN-BD-09).", { rol: ["Es el último administrador activo: no se puede degradar (RN-BD-09)."] })
+    );
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar rol de Luis Pérez" }));
+    const dialogo = screen.getByRole("dialog", { name: "Cambiar rol" });
+    await usuarioEvento.click(within(dialogo).getByLabelText("Administrador"));
+    await usuarioEvento.click(within(dialogo).getByRole("button", { name: "Guardar rol" }));
+
+    expect(await within(dialogo).findByRole("alert")).toHaveTextContent(/último administrador activo/);
+    expect(screen.getByRole("dialog", { name: "Cambiar rol" })).toBeInTheDocument();
+  });
+
+  it("RF-28: desactiva y activa con confirmación", async () => {
+    const servidor = servidorUsuarios()
+      .en("PATCH", "/api/admin/usuarios/12/estado", { cuerpo: { ...ana, activo: false } })
+      .en("PATCH", "/api/admin/usuarios/13/estado", { cuerpo: { ...luis, activo: true } });
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Desactivar a Ana López" }));
+    const confirmacion = screen.getByRole("dialog", { name: "Desactivar cuenta" });
+    expect(within(confirmacion).getByText(/No podrá iniciar sesión/)).toBeInTheDocument();
+    await usuarioEvento.click(within(confirmacion).getByRole("button", { name: "Desactivar" }));
+    expect(await screen.findByText("La cuenta de Ana López quedó desactivada.")).toBeInTheDocument();
+    expect(servidor.a("/api/admin/usuarios/12/estado", "PATCH")[0].cuerpo).toEqual({ activo: false });
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Activar a Luis Pérez" }));
+    await usuarioEvento.click(within(screen.getByRole("dialog", { name: "Activar cuenta" })).getByRole("button", { name: "Activar" }));
+    expect(await screen.findByText("La cuenta de Luis Pérez está activa.")).toBeInTheDocument();
+    expect(servidor.a("/api/admin/usuarios/13/estado", "PATCH")[0].cuerpo).toEqual({ activo: true });
+  });
+
+  it("el detalle muestra métodos de acceso sin datos sensibles y se cierra con Escape", async () => {
+    servidorUsuarios();
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Ver Luis Pérez" }));
+    const dialogo = screen.getByRole("dialog", { name: "Detalle del usuario" });
+    expect(within(dialogo).getByText("Google")).toBeInTheDocument();
+    expect(within(dialogo).queryByText(/hash|sello|token/i)).not.toBeInTheDocument();
+    await usuarioEvento.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("un error de la API se muestra en la tabla", async () => {
+    servidorConSesion(administrador).en("GET", "/api/admin/usuarios", problema(403, "No tienes permiso para esta operación."));
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+
+    expect(await screen.findByText("No tienes permiso para esta operación.")).toBeInTheDocument();
   });
 });
 

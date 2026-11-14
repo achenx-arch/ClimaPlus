@@ -318,6 +318,21 @@ export interface FiltroAlertasAdmin extends FiltroAlertas {
   idUsuario?: number;
 }
 
+// ─── Gestión de usuarios del administrador (contrato-admin-usuarios.md, M14) ─
+
+/** UsuarioAdminResponse: mismos campos no sensibles que el perfil (nunca hash, sello, códigos ni tokens). */
+export type UsuarioAdmin = Usuario;
+
+export type EstadoCuenta = "ACTIVO" | "INACTIVO";
+
+export interface FiltroUsuariosAdmin {
+  /** Texto contenido en el nombre o el correo (sin distinguir mayúsculas). */
+  busqueda?: string;
+  rol?: Rol;
+  estado?: EstadoCuenta;
+  pagina?: number;
+}
+
 // ─── Dispositivos ESP32 (contrato-dispositivos-lecturas.md) ──────────────────
 
 /** Última lectura resumida dentro del objeto Dispositivo. */

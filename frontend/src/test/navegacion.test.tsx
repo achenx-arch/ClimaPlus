@@ -390,14 +390,16 @@ describe("roles", () => {
     expect(await screen.findByRole("heading", { name: "Panel de administración" })).toBeInTheDocument();
   });
 
-  it("Gestión de usuarios se identifica como módulo pendiente sin datos simulados", async () => {
-    const servidor = servidorConSesion(administrador);
+  it("Gestión de usuarios (M14) carga los usuarios reales del backend, sin datos simulados", async () => {
+    const servidor = servidorConSesion(administrador).en("GET", "/api/admin/usuarios", { cuerpo: pagina([administrador]) });
     renderizarApp("/admin/usuarios");
 
-    expect(await screen.findByRole("heading", { name: "Módulo pendiente" })).toBeInTheDocument();
-    expect(screen.getByText(/RF-26, RF-27 y RF-28/)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(servidor.peticiones.some((p) => p.url.pathname.includes("/usuarios") && p.url.pathname.startsWith("/api/admin"))).toBe(false);
+    expect(await screen.findByRole("heading", { name: "Gestión de usuarios" })).toBeInTheDocument();
+    expect(await screen.findByText("admin@ejemplo.com")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Módulo pendiente" })).not.toBeInTheDocument();
+    expect(servidor.a("/api/admin/usuarios")[0].encabezados.authorization).toBeDefined();
+    const menu = screen.getAllByRole("complementary", { name: "Menú de administración" })[0];
+    expect(within(menu).getByRole("link", { name: "Gestión de usuarios" })).toHaveClass("active");
   });
 
   it("el ADMINISTRADOR puede usar Mi espacio y volver al panel desde su menú", async () => {
