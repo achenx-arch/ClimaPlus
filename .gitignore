@@ -12,6 +12,23 @@ appsettings.Development.json
 appsettings.Local.json
 *.secrets.json
 
+# ---------- Respaldos, resultados de pruebas y claves (nunca en Git) ----------
+*.dump
+*.backup
+*.trx
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+id_ed25519*
+pruebas-*.txt
+verificacion-*.txt
+ClimaPlus-respaldos/
+ClimaPlus-despliegue/
+deploy/azure/*.env
+!deploy/azure/*.env.example
+
 # ---------- .NET / ASP.NET Core ----------
 bin/
 obj/

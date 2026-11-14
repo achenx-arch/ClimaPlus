@@ -1,3 +1,15 @@
+# Normaliza el fin de línea: en el repositorio todo archivo de texto se guarda con LF, sin importar core.autocrlf
+# del equipo (evita commits que cambian archivos enteros solo por CRLF).
+* text=auto
+# Scripts de Windows PowerShell 5.1: CRLF en la copia de trabajo.
+*.ps1               text eol=crlf
+# Binarios
+*.png               binary
+*.jpg               binary
+*.zip               binary
+*.xlsx              binary
+*.dump              binary
+
 # Fase 9: archivos que se usan dentro de contenedores Linux o en GitHub Actions siempre con fin de línea LF,
 # aunque se editen en Windows (evita errores con "\r" en Docker, Nginx y los workflows).
 Dockerfile          text eol=lf
@@ -7,3 +19,6 @@ Dockerfile          text eol=lf
 *.yaml              text eol=lf
 *.sh                text eol=lf
 .env.example        text eol=lf
+*.service           text eol=lf
+deploy/azure/**    text eol=lf
+deploy/azure/scripts/*.ps1 text eol=crlf
