@@ -1,4 +1,4 @@
-using ClimaPlus.Api.Domain.Entities;
+﻿using ClimaPlus.Api.Domain.Entities;
 using ClimaPlus.Api.Tests.Infraestructura;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -63,10 +63,15 @@ public sealed class ModeloConsultaClimaTests
         using var db = BaseDatosPruebas.CrearContextoSinConexion();
         var modelo = db.GetService<IDesignTimeModel>().Model;
 
+        // Migración 004: se agregan desafio_autenticacion e identidad_externa (ModeloAutenticacionTests);
+        // las 8 tablas de negocio y sus 26 CHECK siguen iguales.
+        var negocio = modelo.GetEntityTypes()
+            .Where(e => e.GetTableName() is not ("desafio_autenticacion" or "identidad_externa"))
+            .ToList();
         Assert.Equal(
             new[] { "alerta", "configuracion_alerta", "consulta_clima", "dispositivo", "favorito", "lectura_sensor", "ubicacion", "usuario" },
-            modelo.GetEntityTypes().Select(e => e.GetTableName()!).Order().ToArray());
-        Assert.Equal(26, modelo.GetEntityTypes().Sum(e => e.GetCheckConstraints().Count()));
+            negocio.Select(e => e.GetTableName()!).Order().ToArray());
+        Assert.Equal(26, negocio.Sum(e => e.GetCheckConstraints().Count()));
         Assert.Equal(12, Entidad(db).GetProperties().Count());
     }
 
@@ -75,7 +80,9 @@ public sealed class ModeloConsultaClimaTests
     {
         using var db = BaseDatosPruebas.CrearContextoSinConexion();
 
-        Assert.Equal(new[] { Inicial, UsuarioOpcional, Detalle }, db.Database.GetMigrations().ToArray());
+        Assert.Equal(
+            new[] { Inicial, UsuarioOpcional, Detalle, ModeloAutenticacionTests.AutenticacionSegura, ModeloAutenticacionTests.CambioPassword },
+            db.Database.GetMigrations().ToArray());
 
         // Mismo criterio que "dotnet ef migrations has-pending-model-changes".
         var snapshot = db.GetService<IMigrationsAssembly>().ModelSnapshot!.Model;
@@ -141,14 +148,14 @@ public sealed class ModeloConsultaClimaTests
     }
 
     /// <summary>Sentencias del script sin la transacción ni el registro en __EFMigrationsHistory.</summary>
-    private static string[] Sentencias(string script) =>
+    internal static string[] Sentencias(string script) =>
         Normalizar(script)
             .Where(l => l is not "START TRANSACTION;" and not "COMMIT;"
                      && !l.StartsWith("INSERT INTO \"__EFMigrationsHistory\"", StringComparison.Ordinal)
                      && !l.StartsWith("VALUES (", StringComparison.Ordinal))
             .ToArray();
 
-    private static string[] Normalizar(string texto) =>
+    internal static string[] Normalizar(string texto) =>
         texto.TrimStart('﻿')
             .Split('\n')
             .Select(l => l.Trim())
@@ -156,7 +163,7 @@ public sealed class ModeloConsultaClimaTests
             .ToArray();
 
     /// <summary>Lee database/migrations/{archivo} buscando la raíz del repositorio desde la carpeta de las pruebas.</summary>
-    private static string LeerArchivo(string archivo)
+    internal static string LeerArchivo(string archivo)
     {
         for (var carpeta = new DirectoryInfo(AppContext.BaseDirectory); carpeta is not null; carpeta = carpeta.Parent)
         {

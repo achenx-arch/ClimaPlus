@@ -66,7 +66,7 @@ Las rutas públicas se protegen con Rate Limiting de ASP.NET Core (30 peticiones
 
 ### Hardware
 
-En una fase posterior, un ESP32 con BME280 (temperatura y humedad), sensor de lluvia, LDR (luz), pantalla OLED, LED RGB, buzzer y botón enviará lecturas al backend por HTTP/JSON. El ESP32 no consulta OpenWeather ni accede a la base de datos.
+Un ESP32 DevKit con DHT11 (temperatura y humedad), sensor de lluvia, LDR (luz), pantalla LCD 16x2 I2C, buzzer, botón y LED rojo, verde y amarillo envía lecturas al backend por HTTP/JSON (montaje oficial de la Fase 7; la planeación inicial preveía BME280, OLED y LED RGB). El ESP32 no consulta OpenWeather ni accede a la base de datos.
 
 ## Flujos principales
 

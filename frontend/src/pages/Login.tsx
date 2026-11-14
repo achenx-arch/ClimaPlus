@@ -1,13 +1,17 @@
-import { useState, type FormEvent } from "react";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import "./Login.css";
 import { useAuth } from "../context/auth";
 import { ApiError, mensajeDeError } from "../services/apiClient";
 import EnlaceVolver from "../components/EnlaceVolver";
+import VerificacionCodigo from "../components/VerificacionCodigo";
+import BotonGoogle from "../components/BotonGoogle";
+import type { RespuestaDesafio, Usuario } from "../types/api";
 
+// M02 – Inicio de sesión en dos pasos (contrato-auth-perfil.md 4.2 y 4.2.1) y "Continuar con Google" (4.9).
+// La sesión solo se abre al validar el código (o el ID token de Google en la API): el paso 1 nunca da un token.
 export default function Login() {
-  const { estado, usuario, iniciarSesion, mensajeSesion, limpiarMensajeSesion } = useAuth();
+  const { estado, usuario, iniciarSesion, completarInicioSesion, iniciarSesionConGoogle, mensajeSesion, limpiarMensajeSesion } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const estadoNavegacion = location.state as { desde?: string; mensaje?: string } | null;
@@ -19,6 +23,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [bloqueadoHasta, setBloqueadoHasta] = useState<number | null>(null);
+  const [desafio, setDesafio] = useState<RespuestaDesafio | null>(null);
 
   // "Cuenta creada, inicia sesión" (M03) o "Tu sesión expiró" (401 / expiraEn).
   const aviso = estadoNavegacion?.mensaje ?? mensajeSesion;
@@ -31,53 +36,92 @@ export default function Login() {
     return () => window.clearTimeout(temporizador);
   }, [bloqueadoHasta]);
 
-const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  setError("");
-
-  if (!email.trim() || !password) {
-    setError("Por favor, completa todos los campos.");
-    return;
-  }
-
-if (
-  email.trim().length > 150 ||
-  !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(email.trim())
-) {
-  setError("Ingresa un correo electrónico válido.");
-  return;
-}
-
-  if (password.length > 128) {
-    setError("La contraseña no puede superar los 128 caracteres.");
-    return;
-  }
-  setLoading(true);
-  try {
-    const usuario = await iniciarSesion(email.trim(), password, remember);
+  /** USUARIO → M06, ADMINISTRADOR → M13, o la ruta privada que se pidió antes del login. */
+  const irAlDestino = useCallback((u: Usuario) => {
     limpiarMensajeSesion();
-    setPassword("");
+    navigate(estadoNavegacion?.desde ?? (u.rol === "ADMINISTRADOR" ? "/admin" : "/dashboard"), { replace: true });
+  }, [estadoNavegacion?.desde, limpiarMensajeSesion, navigate]);
 
-    // USUARIO → M06, ADMINISTRADOR → M13, o la ruta privada que se pidió antes del login.
-    const destino =
-      estadoNavegacion?.desde ??
-      (usuario.rol === "ADMINISTRADOR" ? "/admin" : "/dashboard");
-    navigate(destino, { replace: true });
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
-      setError("Correo o contraseña incorrectos.");
-    } else if (error instanceof ApiError && error.status === 403) {
-      setError("Tu cuenta está desactivada. Contacta al administrador.");
-    } else if (error instanceof ApiError && error.status === 429) {
-      setError(error.message);
-      setBloqueadoHasta(Date.now() + (error.retryAfterSegundos ?? 60) * 1000);
-    } else {
-      setError(mensajeDeError(error, "No se pudo iniciar sesión."));
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (loading) return;
+    setError("");
+
+    if (!email.trim() || !password) {
+      setError("Por favor, completa todos los campos.");
+      return;
     }
-  } finally {
-    setLoading(false);
-  }
-};
+
+    if (
+      email.trim().length > 150 ||
+      !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(email.trim())
+    ) {
+      setError("Ingresa un correo electrónico válido.");
+      return;
+    }
+
+    if (password.length > 128) {
+      setError("La contraseña no puede superar los 128 caracteres.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Paso 1: la API comprueba la contraseña y envía el código. Todavía no hay sesión.
+      const respuesta = await iniciarSesion(email.trim(), password);
+      setPassword("");
+      setDesafio(respuesta);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setError("Correo o contraseña incorrectos.");
+      } else if (error instanceof ApiError && error.status === 403) {
+        setError("Tu cuenta está desactivada. Contacta al administrador.");
+      } else if (error instanceof ApiError && error.status === 429) {
+        setError(error.message);
+        setBloqueadoHasta(Date.now() + (error.retryAfterSegundos ?? 60) * 1000);
+      } else {
+        setError(mensajeDeError(error, "No se pudo iniciar sesión."));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Paso 2: el código del correo abre la sesión. Los errores los muestra VerificacionCodigo.
+  const verificarCodigo = async (token: string, codigo: string) => {
+    try {
+      const u = await completarInicioSesion(token, codigo, remember);
+      irAlDestino(u);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        throw new ApiError(403, "Tu cuenta está desactivada. Contacta al administrador.");
+      }
+      throw error;
+    }
+  };
+
+  const entrarConGoogle = useCallback(async (credencial: string) => {
+    setError("");
+    try {
+      const u = await iniciarSesionConGoogle(credencial, remember);
+      irAlDestino(u);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setError("No se pudo validar el inicio con Google. Vuelve a intentarlo.");
+      } else if (error instanceof ApiError && error.status === 403) {
+        setError("Tu cuenta está desactivada. Contacta al administrador.");
+      } else if (error instanceof ApiError && (error.status === 409 || error.status === 400 || error.status === 429)) {
+        setError(error.message);
+      } else {
+        setError(mensajeDeError(error, "No se pudo iniciar sesión con Google."));
+      }
+    }
+  }, [iniciarSesionConGoogle, irAlDestino, remember]);
+
+  const volverAlPaso1 = () => {
+    setDesafio(null);
+    setError("");
+  };
 
   // Con la sesión ya iniciada no se muestra el formulario: para entrar con otra cuenta,
   // primero se cierra la sesión actual.
@@ -133,6 +177,29 @@ if (
         <div className="login-form-container">
           <EnlaceVolver to="/">Volver al Inicio</EnlaceVolver>
 
+          {desafio ? (
+            <>
+              <h2>{desafio.proposito === "VERIFICAR_CORREO" ? "Verifica tu correo" : "Verifica que eres tú"}</h2>
+              <VerificacionCodigo
+                desafio={desafio}
+                alVerificar={verificarCodigo}
+                textoBoton="Verificar e iniciar sesión"
+                textoCargando="Verificando..."
+                alVolver={volverAlPaso1}
+                textoVolver="Usar otra cuenta"
+                idCampo="login-codigo"
+                descripcion={
+                  desafio.proposito === "VERIFICAR_CORREO" ? (
+                    <>
+                      Antes de entrar necesitamos confirmar tu correo. Te enviamos un código de 6 dígitos a{" "}
+                      <strong>{desafio.destino}</strong>.
+                    </>
+                  ) : undefined
+                }
+              />
+            </>
+          ) : (
+          <>
           <h2>Bienvenido de nuevo</h2>
           <p className="login-subtitle">
             Ingresa tus datos para continuar.
@@ -234,6 +301,11 @@ if (
 </button>
           </form>
 
+          <div className="acceso-separador">o</div>
+          <BotonGoogle uso="login" alRecibirCredencial={entrarConGoogle} />
+          </>
+          )}
+
           <p className="login-terms">
             Al continuar confirmas que eres mayor de edad y aceptas
             nuestras condiciones de uso.
@@ -242,4 +314,4 @@ if (
       </section>
     </main>
   );
-}
+}

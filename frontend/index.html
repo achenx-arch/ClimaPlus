@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="referrer" content="no-referrer" />
+    <!-- strict-origin-when-cross-origin: a otros sitios solo viaja el origen (nunca la ruta). Google Identity
+         Services necesita el origen para comprobar que el sitio está autorizado; con no-referrer el botón falla. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>ClimaPlus</title>
   </head>
   <body>

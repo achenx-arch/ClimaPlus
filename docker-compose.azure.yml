@@ -1,0 +1,178 @@
+# =====================================================================
+#  ClimaPlus – Producción en la VM de Azure (Ubuntu 24.04) con Docker Compose
+#
+#  Archivo INDEPENDIENTE: no extiende docker-compose.yml (desarrollo en Windows) ni docker-compose.prod.yml, así que
+#  ninguno de los dos cambia y aquí no se heredan puertos de desarrollo, Mailpit ni la inicialización con migraciones.
+#
+#    Internet ──► proxy (Nginx, 80/443, Let's Encrypt) ──► web  (React compilado, Nginx sin privilegios)
+#                                                    └──► api  (ASP.NET Core 8) ──► db (PostgreSQL 18, red interna)
+#                 certbot: renueva el certificado cada 12 h
+#
+#  Uso (en la VM, desde la carpeta del repositorio; secretos en .env.azure, nunca en Git):
+#    docker compose --env-file .env.azure -f docker-compose.azure.yml build
+#    docker compose --env-file .env.azure -f docker-compose.azure.yml up -d
+#  Procedimiento completo: docs/despliegue/azure-docker.md
+# =====================================================================
+name: climaplus
+
+x-logs: &logs
+  driver: json-file
+  options:
+    max-size: "10m"   # máximo 3 × 10 MB de log por contenedor
+    max-file: "3"
+
+x-seguridad: &seguridad
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  db:
+    # PostgreSQL 18, la misma versión mayor que en Windows: pg_restore 16/17 no lee copias de pg_dump 18.
+    image: postgres:18-alpine
+    restart: unless-stopped
+    <<: *seguridad
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?Define POSTGRES_SUPERUSER_PASSWORD en .env.azure}
+      POSTGRES_DB: postgres            # climaplus_db se crea al restaurar la copia (deploy/azure/scripts/restaurar-db-docker.sh)
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --auth-host=scram-sha-256"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=50
+      - -c
+      - log_min_duration_statement=2000   # solo consultas lentas (>2 s), sin parámetros de más
+    shm_size: 256mb
+    volumes:
+      # Desde la imagen 18, el volumen va en /var/lib/postgresql (los datos quedan en /var/lib/postgresql/18/docker).
+      - datos-postgres:/var/lib/postgresql
+    networks:
+      - interna
+    # Sin "ports": PostgreSQL no es accesible desde fuera de Docker.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 1g
+    logging: *logs
+
+  api:
+    build:
+      context: ./backend
+    image: climaplus-api:azure
+    restart: unless-stopped
+    <<: *seguridad
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__ClimaPlusDb: "Host=db;Port=5432;Database=climaplus_db;Username=climaplus_app;Password=${CLIMAPLUS_DB_PASSWORD:?Define CLIMAPLUS_DB_PASSWORD en .env.azure}"
+      Jwt__Clave: ${JWT_CLAVE:?Define JWT_CLAVE (32+ caracteres) en .env.azure}
+      Codigos__ClaveHmac: ${CODIGOS_CLAVE_HMAC:?Define CODIGOS_CLAVE_HMAC (32+ caracteres, distinta de JWT_CLAVE) en .env.azure}
+      Correo__Host: smtp.gmail.com
+      Correo__Puerto: "465"
+      Correo__Seguridad: SslAlConectar
+      Correo__Usuario: ${SMTP_USER:?Define SMTP_USER en .env.azure}
+      Correo__Password: ${SMTP_PASSWORD:?Define SMTP_PASSWORD (contraseña de aplicación) en .env.azure}
+      Correo__Remitente: ${SMTP_FROM:?Define SMTP_FROM en .env.azure}
+      Correo__NombreRemitente: ClimaPlus
+      OpenWeather__ApiKey: ${OPENWEATHER_API_KEY:-}
+      Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      Cors__OrigenesPermitidos__0: https://${DOMINIO:?Define DOMINIO en .env.azure}
+      # Solo se confía en X-Forwarded-For / X-Forwarded-Proto si llegan desde el proxy (IP fija en la red "publica").
+      ProxyInverso__ProxiesConocidos__0: 172.30.10.10
+      AllowedHosts: "${DOMINIO};localhost"
+    networks:
+      - publica   # salida a Gmail, OpenWeather y Google; el proxy llega por aquí
+      - interna   # PostgreSQL
+    # Sin "ports": solo el proxy la alcanza. La imagen no trae curl: la comprobación usa bash.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q Healthy <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 768m
+    logging: *logs
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: https://${DOMINIO:?Define DOMINIO en .env.azure}
+    image: climaplus-web:azure
+    restart: unless-stopped
+    <<: *seguridad
+    networks:
+      - publica
+    # La imagen ya trae HEALTHCHECK (wget a su propio puerto 8080).
+    mem_limit: 64m
+    logging: *logs
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    <<: *seguridad
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO:?Define DOMINIO en .env.azure}
+    volumes:
+      # La imagen oficial sustituye ${DOMINIO} en las plantillas al arrancar (solo variables definidas).
+      - ./deploy/azure/docker/proxy.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot:ro
+    # Recarga la configuración cada 6 h para tomar el certificado renovado.
+    command: ["/bin/sh", "-c", "while :; do sleep 6h; nginx -s reload; done & exec /docker-entrypoint.sh nginx -g 'daemon off;'"]
+    networks:
+      publica:
+        ipv4_address: 172.30.10.10
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/proxy-salud"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 64m
+    logging: *logs
+
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    <<: *seguridad
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint: ["/bin/sh", "-c", "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"]
+    networks:
+      - publica
+    mem_limit: 128m
+    logging: *logs
+
+networks:
+  publica:
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
+  interna:
+    internal: true   # sin salida a Internet ni acceso desde fuera: solo api ↔ db
+
+volumes:
+  datos-postgres:   # datos de PostgreSQL: sobreviven a "down", reinicios y reconstrucciones (nunca usar "down -v")
+  letsencrypt:      # certificados y claves de Let's Encrypt
+  certbot-webroot:  # desafíos HTTP-01 de la renovación

@@ -227,13 +227,20 @@ describe("cierre de sesión y cambio de cuenta", () => {
 
     servidor
       .en("POST", "/api/auth/login", {
+        status: 202,
+        cuerpo: { desafio: "desafio.luis", proposito: "INICIO_SESION", destino: "l***@ejemplo.com", expiraEn: new Date(Date.now() + 300_000).toISOString(), reenviarEn: 60 },
+      })
+      .en("POST", "/api/auth/login/verificar", {
         cuerpo: { token: "token.de.luis", tipoToken: "Bearer", expiraEn: new Date(Date.now() + 3_600_000).toISOString(), usuario: otra },
       })
+      .en("GET", "/api/auth/google/iniciar", { status: 503, cuerpo: { title: "No disponible", status: 503 } })
       .en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
     await usuarioEvento.click(screen.getByRole("link", { name: "Iniciar sesión" }));
     await usuarioEvento.type(screen.getByLabelText("Correo electrónico"), "luis@ejemplo.com");
     await usuarioEvento.type(screen.getByLabelText("Contraseña"), "Ejemplo2026");
-    await usuarioEvento.click(screen.getByRole("button", { name: /Iniciar sesión/ }));
+    await usuarioEvento.click(screen.getByRole("button", { name: /^Iniciar sesión/ }));
+    await usuarioEvento.type(await screen.findByLabelText("Código de verificación"), "048213");
+    await usuarioEvento.click(screen.getByRole("button", { name: /Verificar e iniciar sesión/ }));
 
     expect(await screen.findByRole("heading", { name: /Hola, Luis Gómez/ })).toBeInTheDocument();
     expect(screen.queryByText("Ana López")).not.toBeInTheDocument();
@@ -294,7 +301,10 @@ describe("cierre de sesión: destino final", () => {
       usuario: null,
       esAdministrador: false,
       mensajeSesion: null,
-      iniciarSesion: async () => usuario,
+      iniciarSesion: async () => ({ desafio: "d", proposito: "INICIO_SESION", destino: "a***@ejemplo.com", expiraEn: "", reenviarEn: 60 }),
+      completarInicioSesion: async () => usuario,
+      iniciarSesionConGoogle: async () => usuario,
+      reemplazarSesion: () => {},
       cerrarSesion: () => {},
       cerrarSesionConMensaje: () => {},
       actualizarUsuario: () => {},
@@ -380,14 +390,16 @@ describe("roles", () => {
     expect(await screen.findByRole("heading", { name: "Panel de administración" })).toBeInTheDocument();
   });
 
-  it("Gestión de usuarios se identifica como módulo pendiente sin datos simulados", async () => {
-    const servidor = servidorConSesion(administrador);
+  it("Gestión de usuarios (M14) carga los usuarios reales del backend, sin datos simulados", async () => {
+    const servidor = servidorConSesion(administrador).en("GET", "/api/admin/usuarios", { cuerpo: pagina([administrador]) });
     renderizarApp("/admin/usuarios");
 
-    expect(await screen.findByRole("heading", { name: "Módulo pendiente" })).toBeInTheDocument();
-    expect(screen.getByText(/RF-26, RF-27 y RF-28/)).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(servidor.peticiones.some((p) => p.url.pathname.includes("/usuarios") && p.url.pathname.startsWith("/api/admin"))).toBe(false);
+    expect(await screen.findByRole("heading", { name: "Gestión de usuarios" })).toBeInTheDocument();
+    expect(await screen.findByText("admin@ejemplo.com")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Módulo pendiente" })).not.toBeInTheDocument();
+    expect(servidor.a("/api/admin/usuarios")[0].encabezados.authorization).toBeDefined();
+    const menu = screen.getAllByRole("complementary", { name: "Menú de administración" })[0];
+    expect(within(menu).getByRole("link", { name: "Gestión de usuarios" })).toHaveClass("active");
   });
 
   it("el ADMINISTRADOR puede usar Mi espacio y volver al panel desde su menú", async () => {

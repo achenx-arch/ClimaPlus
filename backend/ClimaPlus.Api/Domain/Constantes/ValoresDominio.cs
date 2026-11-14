@@ -32,3 +32,32 @@ public static class TiposConsulta
     public const string Actual = "ACTUAL";
     public const string Pronostico = "PRONOSTICO";
 }
+
+/// <summary>Dominio "Propósito de desafío" (desafio_autenticacion.proposito). Migración 004.</summary>
+public static class PropositosDesafio
+{
+    public const string VerificarCorreo = "VERIFICAR_CORREO";
+    public const string InicioSesion = "INICIO_SESION";
+    public const string InicioGoogle = "INICIO_GOOGLE";
+    public const string VincularGoogle = "VINCULAR_GOOGLE";
+    public const string RecuperarPassword = "RECUPERAR_PASSWORD";
+    public const string CambiarPassword = "CAMBIAR_PASSWORD";   // migración 005
+
+    public static readonly string[] Todos = { VerificarCorreo, InicioSesion, InicioGoogle, VincularGoogle, RecuperarPassword, CambiarPassword };
+}
+
+/// <summary>Dominio "Estado de desafío" (desafio_autenticacion.estado). Migración 004.</summary>
+public static class EstadosDesafio
+{
+    public const string Pendiente = "PENDIENTE";
+    /// <summary>Solo en recuperación: el código fue correcto y falta escribir la contraseña nueva.</summary>
+    public const string Verificado = "VERIFICADO";
+    public const string Consumido = "CONSUMIDO";
+    public const string Anulado = "ANULADO";
+}
+
+/// <summary>Dominio "Proveedor de identidad" (identidad_externa.proveedor). Migración 004.</summary>
+public static class ProveedoresIdentidad
+{
+    public const string Google = "GOOGLE";
+}

@@ -1,0 +1,72 @@
+/* Pantalla del código de 6 dígitos (usa los estilos base de Login.css). */
+
+.codigo-verificacion-input {
+  letter-spacing: 0.4em;
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+}
+
+.codigo-verificacion-ayuda {
+  display: block;
+  margin-top: 6px;
+  color: #6b7a86;
+  font-size: 13px;
+}
+
+.codigo-verificacion-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.codigo-verificacion-enlace {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #075b85;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.codigo-verificacion-enlace:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.codigo-verificacion-enlace:disabled {
+  color: #9aa7b1;
+  cursor: default;
+}
+
+/* Botón de Google y separador "o" en las pantallas de acceso. */
+
+.acceso-separador {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0 16px;
+  color: #6b7a86;
+  font-size: 13px;
+}
+
+.acceso-separador::before,
+.acceso-separador::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid #dde4ea;
+}
+
+.boton-google {
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.boton-google-estado {
+  margin-top: 8px;
+  color: #6b7a86;
+  font-size: 13px;
+  text-align: center;
+}

@@ -20,7 +20,7 @@ Los mockups M16 (Mi perfil · Usuario) y M17 (Mi perfil · Administrador) se dis
 |---|---|---|---|---|
 | RF-31 | Consultar el perfil propio: nombre, correo, rol, estado y fecha de registro | M16, M17 | usuario | `GET /api/usuarios/me` |
 | RF-32 | Modificar el nombre y el correo propios | M16, M17 | usuario | `PUT /api/usuarios/me` |
-| RF-33 | Cambiar la contraseña propia verificando la actual | M16, M17 | usuario | `PUT /api/usuarios/me/password` |
+| RF-33 | Cambiar la contraseña propia verificando la actual | M16, M17 | usuario | `PUT /api/usuarios/me/password` (sustituido en la migración 005 por `POST /api/usuarios/me/password/cambio` + `/cambio/verificar`, con código por correo) |
 
 Los tres requerimientos aplican a USUARIO y ADMINISTRADOR. No requieren tablas ni columnas nuevas: usan `usuario.nombre`, `usuario.correo` y `usuario.password_hash`, y solo leen `rol`, `activo` y `fecha_creacion`.
 

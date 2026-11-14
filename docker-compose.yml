@@ -4,6 +4,7 @@
 #    1. cp .env.example .env      (y cambia las claves)
 #    2. docker compose up -d --build
 #    3. Frontend: http://localhost:3000 · API: http://localhost:8080 · Salud: http://localhost:8080/health
+#    4. Correos de prueba (códigos de verificación): http://localhost:8025 (Mailpit, no envía nada a internet)
 #
 #  La base de datos se crea la primera vez con las migraciones de database/migrations.
 #  Para empezar de cero (BORRA los datos de Docker): docker compose down -v
@@ -20,7 +21,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el archivo .env}
     volumes:
       - datos-postgres:/var/lib/postgresql/data
-      # Solo se ejecutan la primera vez (volumen vacío), en orden: 001, 002, 003.
+      # Solo se ejecutan la primera vez (volumen vacío), en orden: 001 a 005.
+      # Con un volumen que ya existía, la 004 y la 005 se aplican a mano (docs/despliegue/migracion-005.md, sección 8).
       - ./database/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d climaplus_db"]
@@ -43,14 +45,37 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__ClimaPlusDb: "Host=db;Port=5432;Database=climaplus_db;Username=${POSTGRES_USER:-climaplus};Password=${POSTGRES_PASSWORD}"
       Jwt__Clave: ${JWT_CLAVE:?Define JWT_CLAVE (32 caracteres o más) en el archivo .env}
+      # Clave HMAC de los códigos de verificación: distinta de JWT_CLAVE, 32 caracteres o más.
+      Codigos__ClaveHmac: ${CODIGOS_CLAVE_HMAC:?Define CODIGOS_CLAVE_HMAC (32 caracteres o más, distinta de JWT_CLAVE) en el archivo .env}
       OpenWeather__ApiKey: ${OPENWEATHER_API_KEY:-}
       Cors__OrigenesPermitidos__0: ${FRONTEND_URL:-http://localhost:3000}
       AdminInicial__Nombre: ${ADMIN_NOMBRE:-}
       AdminInicial__Correo: ${ADMIN_CORREO:-}
       AdminInicial__Password: ${ADMIN_PASSWORD:-}
+      # Autenticación segura: sin SMTP_HOST se usa Mailpit (local, sin TLS). En el servidor: smtp.gmail.com, 587, StartTls.
+      Correo__Host: ${SMTP_HOST:-mailpit}
+      Correo__Puerto: ${SMTP_PORT:-1025}
+      Correo__Usuario: ${SMTP_USER:-}
+      Correo__Password: ${SMTP_PASSWORD:-}
+      Correo__Remitente: ${SMTP_FROM:-no-reply@climaplus.local}
+      Correo__NombreRemitente: ${SMTP_FROM_NAME:-ClimaPlus}
+      Correo__Seguridad: ${SMTP_SEGURIDAD:-Ninguna}
+      # Fase 5: Client ID de Google (tipo "Aplicación web"). Vacío = "Continuar con Google" desactivado (503).
+      # No hay Client Secret: Google Identity Services + validación del ID token en la API.
+      Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      # H-05: red desde la que llega el proxy HTTPS (Caddy/Nginx). Vacío = sin proxy delante.
+      ProxyInverso__RedesConocidas__0: ${PROXY_RED_CONOCIDA:-}
     ports:
       # El ESP32 usa este puerto: http://<IP de la PC>:8080/api/lecturas
       - "8080:8080"
+
+  # Capturador de correos para desarrollo: recibe los códigos y los muestra en http://localhost:8025.
+  # No envía nada a internet. En el servidor no se usa (docker-compose.prod.yml lo desactiva).
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
 
   web:
     build:

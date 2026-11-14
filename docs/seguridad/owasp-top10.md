@@ -79,7 +79,22 @@ riesgos residuales que dependen del despliegue (Fase 9).
 - Errores como ProblemDetails, sin mensajes internos ni pila de llamadas.
 - Swagger solo en desarrollo (en Producción responde 401).
 - Configuración validada al arrancar (`ValidateOnStart`): la API no inicia con una clave JWT débil o límites inválidos.
-- Frontend compilado con CSP (`default-src 'self'`; conexiones solo a la API configurada) y `referrer` `no-referrer`. Verificado en Chromium: 0 violaciones de CSP.
+- La tabla anterior es la de la **API** y no cambió con "Continuar con Google": la API no carga scripts ni abre ventanas.
+- Frontend compilado con CSP (`default-src 'self'`; conexiones solo a la API configurada). Verificado en Chromium: 0 violaciones de CSP.
+- **Cambio de la fase 6 (Google Identity Services), solo en el frontend** (`vite.config.ts`, `index.html`, `frontend/nginx/cabeceras-seguridad.conf`):
+
+  | Qué | Antes | Ahora | Por qué |
+  |---|---|---|---|
+  | CSP `script-src` | `'self'` | `'self' https://accounts.google.com/gsi/client` | Script oficial del botón de Google; solo esa URL exacta |
+  | CSP `style-src` | `'self' 'unsafe-inline'` | + `https://accounts.google.com/gsi/style` | Hoja de estilos del botón |
+  | CSP `frame-src` | (por `default-src 'self'`) | `https://accounts.google.com/gsi/` | El botón oficial se dibuja en un iframe de Google |
+  | CSP `connect-src` | `'self'` + API | + `https://accounts.google.com/gsi/` | Llamadas de GIS al estado de la sesión de Google |
+  | Referrer-Policy | `no-referrer` | `strict-origin-when-cross-origin` | Con `no-referrer` el botón de Google falla; este valor solo envía el origen (sin ruta ni consulta) a otros sitios |
+  | Cross-Origin-Opener-Policy (Nginx) | `same-origin` | `same-origin-allow-popups` | `same-origin` corta la comunicación con el popup de Google |
+
+  Son los valores que pide la documentación de Google Identity Services. Siguen prohibidos `'unsafe-eval'`, scripts
+  en línea, otros dominios y que la página se incruste en otro sitio (`frame-ancestors 'none'`). El ID token de Google
+  no se guarda: se envía una vez a la API, que lo valida (firma, emisor, audiencia, vencimiento y nonce de un solo uso).
 - **Pruebas:** `CabecerasSeguridadTests` (9 pruebas).
 
 ### A06 – Vulnerable and Outdated Components · Cumple

@@ -12,8 +12,11 @@ public class Usuario
     /// <summary>Correo de inicio de sesión, guardado en minúsculas (RN-BD-04).</summary>
     public string Correo { get; set; } = string.Empty;
 
-    /// <summary>Hash generado con PasswordHasher; nunca la contraseña (RN-BD-06).</summary>
-    public string PasswordHash { get; set; } = string.Empty;
+    /// <summary>
+    /// Hash generado con PasswordHasher; nunca la contraseña (RN-BD-06).
+    /// NULL solo en cuentas creadas con Google que aún no establecieron una contraseña local (migración 004).
+    /// </summary>
+    public string? PasswordHash { get; set; }
 
     public string Rol { get; set; } = Roles.Usuario;
 
@@ -22,6 +25,15 @@ public class Usuario
 
     /// <summary>Asignada por la base de datos (DEFAULT now()) si no se establece.</summary>
     public DateTime FechaCreacion { get; set; }
+
+    /// <summary>TRUE cuando el usuario demostró que el correo es suyo con un código (migración 004).</summary>
+    public bool CorreoVerificado { get; set; }
+
+    /// <summary>
+    /// Origen del sello "sv" del JWT (migración 004). Se renueva al cambiar o restablecer la contraseña y al vincular
+    /// Google: todas las sesiones emitidas antes dejan de ser válidas.
+    /// </summary>
+    public Guid SelloSeguridad { get; set; } = Guid.NewGuid();
 
     public ICollection<Favorito> Favoritos { get; set; } = new List<Favorito>();
 
@@ -32,4 +44,8 @@ public class Usuario
     public ICollection<Dispositivo> Dispositivos { get; set; } = new List<Dispositivo>();
 
     public ICollection<Alerta> Alertas { get; set; } = new List<Alerta>();
+
+    public ICollection<DesafioAutenticacion> DesafiosAutenticacion { get; set; } = new List<DesafioAutenticacion>();
+
+    public ICollection<IdentidadExterna> IdentidadesExternas { get; set; } = new List<IdentidadExterna>();
 }

@@ -1,0 +1,52 @@
+# =====================================================================
+#  ClimaPlus – API ASP.NET Core 8 como servicio systemd (Ubuntu 24.04)
+#  Instalar:  sudo cp climaplus-api.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#             sudo systemctl enable --now climaplus-api
+#  Logs:      journalctl -u climaplus-api -f
+#  La API escucha solo en 127.0.0.1:5000; Nginx es el único acceso público (80/443).
+# =====================================================================
+[Unit]
+Description=ClimaPlus API (ASP.NET Core 8)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=climaplus
+Group=climaplus
+WorkingDirectory=/opt/climaplus/api
+ExecStart=/usr/bin/dotnet /opt/climaplus/api/ClimaPlus.Api.dll
+EnvironmentFile=/etc/climaplus/api.env
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5000
+Environment=DOTNET_NOLOGO=true
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
+# Carpeta propia escribible (claves de Data Protection de ASP.NET), /var/lib/climaplus
+StateDirectory=climaplus
+Environment=HOME=/var/lib/climaplus
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+SyslogIdentifier=climaplus-api
+
+# Endurecimiento: sin privilegios extra, sistema de archivos de solo lectura salvo su carpeta de estado.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

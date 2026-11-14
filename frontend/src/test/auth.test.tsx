@@ -11,6 +11,18 @@ import { administrador, usuario } from "./datos";
 import { TOKEN_PRUEBA, conSesion, renderizar } from "./renderizar";
 import { crearServidor, problema } from "./servidorFalso";
 
+/** 202 del paso 1 del login (RespuestaDesafio). */
+const desafioLogin = (proposito = "INICIO_SESION", reenviarEn = 60) => ({
+  status: 202,
+  cuerpo: {
+    desafio: "desafio.login.1",
+    proposito,
+    destino: "a***@ejemplo.com",
+    expiraEn: new Date(Date.now() + 300_000).toISOString(),
+    reenviarEn,
+  },
+});
+
 const respuestaLogin = (u = usuario) => ({
   cuerpo: {
     token: "jwt.nuevo.token",
@@ -20,12 +32,20 @@ const respuestaLogin = (u = usuario) => ({
   },
 });
 
+/** Paso 1: correo y contraseña. */
 async function iniciarSesion(correo = "ana.lopez@ejemplo.com", password = "Ejemplo2026", recordar = false) {
   const usuarioEvento = userEvent.setup();
   await usuarioEvento.type(screen.getByLabelText("Correo electrónico"), correo);
   await usuarioEvento.type(screen.getByLabelText("Contraseña"), password);
   if (recordar) await usuarioEvento.click(screen.getByLabelText("Recordarme"));
-  await usuarioEvento.click(screen.getByRole("button", { name: /Iniciar sesión/ }));
+  await usuarioEvento.click(screen.getByRole("button", { name: /^Iniciar sesión/ }));
+}
+
+/** Paso 2: el código que llegó al correo. */
+async function escribirCodigo(codigo = "048213") {
+  const usuarioEvento = userEvent.setup();
+  await usuarioEvento.type(await screen.findByLabelText("Código de verificación"), codigo);
+  await usuarioEvento.click(screen.getByRole("button", { name: /Verificar e iniciar sesión/ }));
 }
 
 const rutasPrivadas = (
@@ -36,24 +56,40 @@ const rutasPrivadas = (
 );
 
 describe("autenticación", () => {
-  it("inicia sesión, guarda el token solo en memoria y lleva a M06", async () => {
-    const servidor = crearServidor().en("POST", "/api/auth/login", respuestaLogin()).en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
+  it("inicia sesión en dos pasos: la contraseña no abre sesión; el código sí, y guarda el token solo en memoria", async () => {
+    const servidor = crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin())
+      .en("POST", "/api/auth/login/verificar", respuestaLogin())
+      .en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
     renderizar(<Login />, { ruta: "/login", patron: "/login", rutasExtra: rutasPrivadas });
 
     await iniciarSesion();
 
-    expect(await screen.findByText("Dashboard privado")).toBeInTheDocument();
+    // Paso 1: sin token y en la pantalla del código.
+    expect(await screen.findByRole("heading", { name: "Verifica que eres tú" })).toBeInTheDocument();
+    expect(screen.getByText("a***@ejemplo.com")).toBeInTheDocument();
+    expect(hayToken()).toBe(false);
     expect(servidor.a("/api/auth/login")[0].cuerpo).toEqual({ correo: "ana.lopez@ejemplo.com", password: "Ejemplo2026" });
+
+    await escribirCodigo();
+
+    expect(await screen.findByText("Dashboard privado")).toBeInTheDocument();
+    expect(servidor.a("/api/auth/login/verificar")[0].cuerpo).toEqual({ desafio: "desafio.login.1", codigo: "048213" });
     expect(hayToken()).toBe(true);
     expect(sessionStorage.getItem(CLAVE_SESION)).toBeNull();
     expect(JSON.stringify({ ...localStorage })).not.toContain("jwt.nuevo.token");
   });
 
   it("con Recordarme guarda solo token y expiración en sessionStorage (nunca la contraseña)", async () => {
-    crearServidor().en("POST", "/api/auth/login", respuestaLogin()).en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
+    crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin())
+      .en("POST", "/api/auth/login/verificar", respuestaLogin())
+      .en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
     renderizar(<Login />, { ruta: "/login", patron: "/login", rutasExtra: rutasPrivadas });
 
     await iniciarSesion(undefined, undefined, true);
+    expect(sessionStorage.getItem(CLAVE_SESION)).toBeNull();   // nada se guarda antes del código
+    await escribirCodigo();
     await screen.findByText("Dashboard privado");
 
     const guardado = JSON.parse(sessionStorage.getItem(CLAVE_SESION)!);
@@ -63,10 +99,14 @@ describe("autenticación", () => {
   });
 
   it("un ADMINISTRADOR va a M13", async () => {
-    crearServidor().en("POST", "/api/auth/login", respuestaLogin(administrador)).en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
+    crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin())
+      .en("POST", "/api/auth/login/verificar", respuestaLogin(administrador))
+      .en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
     renderizar(<Login />, { ruta: "/login", patron: "/login", rutasExtra: rutasPrivadas });
 
     await iniciarSesion("admin@ejemplo.com");
+    await escribirCodigo();
 
     expect(await screen.findByText("Panel admin")).toBeInTheDocument();
   });
@@ -91,7 +131,122 @@ describe("autenticación", () => {
     await iniciarSesion();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Demasiados intentos");
-    expect(screen.getByRole("button", { name: /Iniciar sesión/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Iniciar sesión/ })).toBeDisabled();
+  });
+
+  it("código incorrecto: muestra el error del campo y no abre sesión", async () => {
+    crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin())
+      .en("POST", "/api/auth/login/verificar", problema(400, "x", { codigo: ["El código no es válido o ya venció."] }));
+    renderizar(<Login />, { ruta: "/login", patron: "/login", rutasExtra: rutasPrivadas });
+
+    await iniciarSesion();
+    await escribirCodigo("111111");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("El código no es válido o ya venció.");
+    expect(hayToken()).toBe(false);
+    expect(screen.queryByText("Dashboard privado")).not.toBeInTheDocument();
+  });
+
+  it("código: 429 por bloqueo de la cuenta deshabilita la verificación", async () => {
+    crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin())
+      .en("POST", "/api/auth/login/verificar", problema(429, "Demasiados intentos fallidos para esta cuenta.", undefined, { "Retry-After": "900" }));
+    renderizar(<Login />, { ruta: "/login", patron: "/login" });
+
+    await iniciarSesion();
+    await escribirCodigo();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Demasiados intentos fallidos");
+    expect(screen.getByRole("button", { name: /Verificar e iniciar sesión/ })).toBeDisabled();
+    expect(hayToken()).toBe(false);
+  });
+
+  it("un código con menos de 6 dígitos no llega al backend", async () => {
+    const servidor = crearServidor().en("POST", "/api/auth/login", desafioLogin());
+    renderizar(<Login />, { ruta: "/login", patron: "/login" });
+
+    await iniciarSesion();
+    await escribirCodigo("12a4");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Escribe los 6 dígitos del código.");
+    expect(servidor.a("/api/auth/login/verificar")).toHaveLength(0);
+  });
+
+  it("no envía el código dos veces aunque se pulse dos veces", async () => {
+    let liberar: () => void = () => {};
+    const servidor = crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin())
+      .en("POST", "/api/auth/login/verificar", () => new Promise((resolver) => {
+        liberar = () => resolver(respuestaLogin());
+      }))
+      .en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
+    renderizar(<Login />, { ruta: "/login", patron: "/login", rutasExtra: rutasPrivadas });
+    const usuarioEvento = userEvent.setup();
+
+    await iniciarSesion();
+    await usuarioEvento.type(await screen.findByLabelText("Código de verificación"), "048213");
+    const formulario = screen.getByRole("button", { name: /Verificar e iniciar sesión/ }).closest("form")!;
+    act(() => {
+      formulario.requestSubmit();
+      formulario.requestSubmit();
+    });
+    await act(async () => liberar());
+
+    expect(await screen.findByText("Dashboard privado")).toBeInTheDocument();
+    expect(servidor.a("/api/auth/login/verificar")).toHaveLength(1);
+  });
+
+  it("reenviar código usa el desafío nuevo que devuelve el backend", async () => {
+    const servidor = crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin("INICIO_SESION", 0))
+      .en("POST", "/api/auth/reenviar-codigo", {
+        status: 202,
+        cuerpo: { desafio: "desafio.login.2", proposito: "INICIO_SESION", expiraEn: new Date(Date.now() + 300_000).toISOString(), reenviarEn: 60 },
+      })
+      .en("POST", "/api/auth/login/verificar", respuestaLogin())
+      .en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
+    renderizar(<Login />, { ruta: "/login", patron: "/login", rutasExtra: rutasPrivadas });
+    const usuarioEvento = userEvent.setup();
+
+    await iniciarSesion();
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Reenviar código" }));
+
+    expect(await screen.findByText(/Te enviamos un código nuevo/)).toBeInTheDocument();
+    expect(servidor.a("/api/auth/reenviar-codigo")[0].cuerpo).toEqual({ desafio: "desafio.login.1" });
+    expect(screen.getByRole("button", { name: /Reenviar código en \d+ s/ })).toBeDisabled();
+    await escribirCodigo();
+    await screen.findByText("Dashboard privado");
+    expect(servidor.a("/api/auth/login/verificar")[0].cuerpo).toEqual({ desafio: "desafio.login.2", codigo: "048213" });
+  });
+
+  it("una cuenta sin verificar recibe el código de verificación de correo y entra al validarlo", async () => {
+    crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin("VERIFICAR_CORREO"))
+      .en("POST", "/api/auth/login/verificar", respuestaLogin())
+      .en("GET", "/api/alertas/contador", { cuerpo: { nuevas: 0 } });
+    renderizar(<Login />, { ruta: "/login", patron: "/login", rutasExtra: rutasPrivadas });
+
+    await iniciarSesion();
+
+    expect(await screen.findByRole("heading", { name: "Verifica tu correo" })).toBeInTheDocument();
+    await escribirCodigo();
+    expect(await screen.findByText("Dashboard privado")).toBeInTheDocument();
+  });
+
+  it("un 500 en el código muestra un mensaje genérico, sin detalles internos, y no abre sesión", async () => {
+    crearServidor()
+      .en("POST", "/api/auth/login", desafioLogin())
+      .en("POST", "/api/auth/login/verificar", problema(500, "NullReferenceException en AuthService"));
+    renderizar(<Login />, { ruta: "/login", patron: "/login" });
+
+    await iniciarSesion();
+    await escribirCodigo();
+
+    const alerta = await screen.findByRole("alert");
+    expect(alerta).toHaveTextContent("Ocurrió un error inesperado en el servidor.");
+    expect(alerta).not.toHaveTextContent("NullReference");
+    expect(hayToken()).toBe(false);
   });
 
   it("restaura una sesión recordada validándola con GET /api/auth/me", async () => {

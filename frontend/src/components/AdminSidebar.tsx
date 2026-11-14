@@ -6,7 +6,7 @@ import "./AdminSidebar.css";
 const ENLACES_ADMIN = [
   { ruta: "/admin", nombre: "Panel administrativo", icono: "bi-speedometer2", pendiente: false },
   { ruta: "/admin/alertas", nombre: "Gestión de alertas", icono: "bi-bell", pendiente: false },
-  { ruta: "/admin/usuarios", nombre: "Gestión de usuarios", icono: "bi-people", pendiente: true },
+  { ruta: "/admin/usuarios", nombre: "Gestión de usuarios", icono: "bi-people", pendiente: false },
 ];
 
 const clase = ({ isActive }: { isActive: boolean }) => (isActive ? "admin-sidebar-link active" : "admin-sidebar-link");

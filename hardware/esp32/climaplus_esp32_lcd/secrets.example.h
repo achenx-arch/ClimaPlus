@@ -15,6 +15,7 @@
 // IP de tu PC (ipconfig → Dirección IPv4). No uses "localhost".
 
 //   En modo desarrollo:  http://TU-IP:5208/api/lecturas
+//   En Azure (HTTPS, el certificado se valida con ca_raiz.h):  https://TU-DOMINIO/api/lecturas
 #define API_URL "http://192.168.1.50:8080/api/lecturas"
 
 // API Key que muestra "Mis dispositivos" al registrar el dispositivo (una sola vez).

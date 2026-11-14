@@ -9,7 +9,7 @@ public static class ClaimsClimaPlus
     /// <summary>Rol del usuario (USUARIO o ADMINISTRADOR).</summary>
     public const string Rol = "role";
 
-    /// <summary>Sello de sesión: cambia cuando cambia la contraseña (ver SelloSesion).</summary>
+    /// <summary>Sello de sesión: cambia cuando se renueva usuario.sello_seguridad (ver SelloSesion).</summary>
     public const string Sello = "sv";
 }
 
@@ -19,6 +19,18 @@ public static class PoliticasSeguridad
     public const string CorsFrontend = "FrontendClimaPlus";
 
     public const string RateLimitAutenticacion = "autenticacion";
+
+    /// <summary>Autenticación segura: POST /api/auth/register, por IP.</summary>
+    public const string RateLimitRegistro = "registro";
+
+    /// <summary>Autenticación segura: endpoints que validan un código de 6 dígitos, por IP (límite compartido).</summary>
+    public const string RateLimitCodigos = "codigos";
+
+    /// <summary>Autenticación segura: POST /api/auth/reenviar-codigo, por IP.</summary>
+    public const string RateLimitReenvio = "reenvio";
+
+    /// <summary>Solicitar recuperación o establecer contraseña (envían un código al correo).</summary>
+    public const string RateLimitRecuperacion = "recuperacion";
 
     public const string RateLimitClima = "clima";
 

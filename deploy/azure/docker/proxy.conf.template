@@ -1,0 +1,97 @@
+# =====================================================================
+#  ClimaPlus – Nginx público (contenedor "proxy" de docker-compose.azure.yml)
+#  Plantilla: la imagen oficial de Nginx reemplaza ${DOMINIO} al arrancar. Las variables propias de Nginx
+#  (las que empiezan con $ y no son de entorno) no se tocan.
+# =====================================================================
+
+server_tokens off;
+
+# HTTP: desafíos de Let's Encrypt, comprobación interna y redirección a HTTPS.
+server {
+    listen 80;
+    server_name ${DOMINIO};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Healthcheck del propio contenedor (solo desde dentro).
+    location = /proxy-salud {
+        allow 127.0.0.1;
+        deny all;
+        access_log off;
+        return 200 "ok";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS dirigido a la IP u otro nombre: se rechaza.
+server {
+    listen 443 ssl default_server;
+    server_name _;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMINIO};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMINIO}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMINIO}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # Las respuestas de "web" y "api" ya traen sus cabeceras de seguridad; aquí se agrega HSTS para todo el sitio.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    client_max_body_size 1m;   # igual que Kestrel
+
+    # Docker resuelve "api" y "web" por su DNS interno.
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
+    # API: /api/* (incluye POST /api/lecturas del ESP32 con X-Device-Key) y /health.
+    location /api/ {
+        set $api http://api:8080;
+        proxy_pass $api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;   # una sola entrada: la IP real del cliente
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+
+    location = /health {
+        set $api http://api:8080;
+        proxy_pass $api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        access_log off;
+    }
+
+    # Swagger solo existe en Development.
+    location /swagger {
+        return 404;
+    }
+
+    # Frontend (rutas de la SPA, caché y cabeceras las resuelve el contenedor "web").
+    location / {
+        set $web http://web:8080;
+        proxy_pass $web;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+    }
+}

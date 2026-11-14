@@ -9,7 +9,7 @@
 | ORM | **Entity Framework Core** (proveedor Npgsql) | Mapeo objeto-relacional, migraciones y consultas parametrizadas | Desarrollo |
 | Base de datos | **PostgreSQL 16** | Almacenamiento relacional de las 8 tablas (D-05) | Desarrollo |
 | API externa | **OpenWeather** | Geocoding, Current Weather y 5 day / 3 hour Forecast, consumidos solo desde el backend | Desarrollo |
-| Hardware | **ESP32** | Placa con BME280, sensor de lluvia, LDR, OLED, LED RGB, buzzer y botón | Fase posterior |
+| Hardware | **ESP32 DevKit** | DHT11, sensor de lluvia, LDR, LCD 16x2 I2C, buzzer, botón y LED rojo, verde y amarillo (montaje oficial; en la planeación inicial se previó BME280, OLED y LED RGB) | Implementado (Fase 7) |
 | Control de versiones | **Git** | Historial de cambios del proyecto | Desde Fase 1 |
 | Control de versiones | **GitHub** | Repositorio remoto y colaboración | Desde Fase 1 |
 | Contenedores | **Docker** | Contenedores para la base de datos, el backend y el frontend | **Fase posterior** |

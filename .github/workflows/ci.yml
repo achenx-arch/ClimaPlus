@@ -2,7 +2,7 @@
 #  ClimaPlus – Integración continua (Fase 9)
 #  En cada Pull Request y en cada push a main:
 #    backend     → compila, 509+ pruebas xUnit (con PostgreSQL real) y revisa paquetes NuGet vulnerables
-#    base-datos  → aplica las migraciones y ejecuta las 71 pruebas SQL
+#    base-datos  → aplica las migraciones 001 a 004 y ejecuta las 95 pruebas SQL
 #    frontend    → lint, pruebas Vitest, build y npm audit
 #    docker      → construye las imágenes, levanta todo con Docker Compose y hace una prueba de humo
 # =====================================================================
@@ -41,8 +41,14 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mailpit:
+        image: axllent/mailpit:v1.33.1
+        ports:
+          - 1025:1025
+          - 8025:8025
     env:
       DOTNET_NOLOGO: true
+      MAILPIT_URL: http://localhost:8025
       DOTNET_CLI_TELEMETRY_OPTOUT: true
       # Base aislada que termina en _test (las pruebas se niegan a usar otra).
       CLIMAPLUS_TEST_DB: Host=localhost;Port=5432;Database=climaplus_test;Username=postgres;Password=postgres
@@ -102,7 +108,7 @@ jobs:
           path: TestResults/
 
   base-datos:
-    name: Base de datos (migraciones + 71 pruebas SQL)
+    name: Base de datos (migraciones + 95 pruebas SQL)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -127,9 +133,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Aplicar migraciones 001 a 003
+      - name: Aplicar migraciones 001 a 004
         run: |
-          for f in database/migrations/*.sql; do   # el glob ya sale en orden: 001, 002, 003
+          for f in database/migrations/*.sql; do   # el glob ya sale en orden: 001 a 004
             echo "Aplicando $f"
             psql -v ON_ERROR_STOP=1 -q -f "$f"
           done
@@ -142,7 +148,7 @@ jobs:
           aprobadas=$(grep -c "PASS" salida-sql.txt)
           echo "Pruebas SQL aprobadas: $aprobadas"
           if grep -q "FAIL" salida-sql.txt; then echo "::error::Hay pruebas SQL fallidas."; exit 1; fi
-          test "$aprobadas" -ge 71
+          test "$aprobadas" -ge 95
 
       - name: Pruebas E-02/E-03 (los casos 3 a 7 deben fallar con su restricción)
         run: |
@@ -189,6 +195,7 @@ jobs:
           cp .env.example .env
           sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" .env
           sed -i "s|^JWT_CLAVE=.*|JWT_CLAVE=$(openssl rand -base64 48 | tr -d '\n')|" .env
+          sed -i "s|^CODIGOS_CLAVE_HMAC=.*|CODIGOS_CLAVE_HMAC=$(openssl rand -base64 48 | tr -d '\n')|" .env
 
       - name: Construir imágenes
         run: docker compose build
@@ -208,11 +215,40 @@ jobs:
       - name: Prueba de humo
         run: |
           set -e
-          # Registro e inicio de sesión contra PostgreSQL inicializado con las migraciones.
-          curl -fsS -X POST http://localhost:8080/api/auth/register -H "Content-Type: application/json" \
-            -d '{"nombre":"Prueba CI","correo":"ci@ejemplo.com","password":"ClimaPlus2026"}' -o /dev/null
-          curl -fsS -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/json" \
-            -d '{"correo":"ci@ejemplo.com","password":"ClimaPlus2026"}' | grep -q '"token"'
+          esperar_codigo() {
+            local asunto="$1" mensajes id detalle codigo
+            for _ in $(seq 1 20); do
+              mensajes=$(curl -fsS --get --data-urlencode 'query=to:ci@ejemplo.com' \
+                http://localhost:8025/api/v1/search) || return 1
+              id=$(jq -r --arg asunto "$asunto" '[.messages[] | select(.Subject == $asunto)][0].ID // empty' <<< "$mensajes")
+              if [ -n "$id" ]; then
+                detalle=$(curl -fsS "http://localhost:8025/api/v1/message/$id") || return 1
+                codigo=$(jq -r '.Text' <<< "$detalle" | tr -d '\r' | grep -oE '^ {4}[0-9]{6}$' | tr -d ' ')
+                test -n "$codigo" || return 1
+                echo "$codigo"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "::error::Mailpit no recibió el correo esperado: $asunto" >&2
+            return 1
+          }
+          # Registro (202 + código por correo), verificación con el código leído de Mailpit e inicio de sesión,
+          # contra PostgreSQL inicializado con las migraciones 001 a 004.
+          DESAFIO=$(curl -fsS -X POST http://localhost:8080/api/auth/register -H "Content-Type: application/json" \
+            -d '{"nombre":"Prueba CI","correo":"ci@ejemplo.com","password":"ClimaPlus2026"}' | jq -r '.desafio')
+          test -n "$DESAFIO" && test "$DESAFIO" != "null"
+          CODIGO=$(esperar_codigo 'Verifica tu correo en ClimaPlus')
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/auth/verificar-correo \
+            -H "Content-Type: application/json" -d "{\"desafio\":\"$DESAFIO\",\"codigo\":\"$CODIGO\"}")" = "204"
+          # Inicio de sesión en dos pasos: contraseña (202 + código por correo) y código (200 con el JWT).
+          LOGIN=$(curl -fsS -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/json" \
+            -d '{"correo":"ci@ejemplo.com","password":"ClimaPlus2026"}')
+          if echo "$LOGIN" | grep -q '"token"'; then echo "::error::El paso 1 del login no debe entregar el JWT"; exit 1; fi
+          DESAFIO_LOGIN=$(echo "$LOGIN" | jq -r '.desafio')
+          CODIGO_LOGIN=$(esperar_codigo 'Tu código para iniciar sesión en ClimaPlus')
+          curl -fsS -X POST http://localhost:8080/api/auth/login/verificar -H "Content-Type: application/json" \
+            -d "{\"desafio\":\"$DESAFIO_LOGIN\",\"codigo\":\"$CODIGO_LOGIN\"}" | grep -q '"token"'
           # Cabeceras de seguridad de la API y del frontend; rutas de React servidas por Nginx.
           curl -fsSI http://localhost:8080/health | grep -qi "x-frame-options: DENY"
           curl -fsSI http://localhost:3000/dashboard | grep -qi "x-frame-options: DENY"

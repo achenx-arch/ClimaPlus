@@ -11,7 +11,7 @@ namespace ClimaPlus.Api.Tests.Seguridad;
 
 /// <summary>
 /// Fase 8 – OWASP A07 (Identification and Authentication Failures): bloqueo temporal por cuenta y revocación de
-/// sesiones al cambiar la contraseña.
+/// sesiones al cambiar la contraseña. Desde la autenticación segura (fase 3) el inicio de sesión tiene dos pasos.
 /// </summary>
 public sealed class AutenticacionAvanzadaTests : IClassFixture<ClimaPlusApiFactory>
 {
@@ -61,7 +61,7 @@ public sealed class AutenticacionAvanzadaTests : IClassFixture<ClimaPlusApiFacto
         await Ayudas.RegistrarAsync(_cliente, otro);
         await FallarAsync(bloqueado, 5);
 
-        Assert.Equal(HttpStatusCode.OK, (await Ayudas.LoginAsync(_cliente, otro)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Ayudas.IniciarSesionCompletaAsync(_cliente, otro)).StatusCode);
     }
 
     [Fact]
@@ -81,10 +81,11 @@ public sealed class AutenticacionAvanzadaTests : IClassFixture<ClimaPlusApiFacto
         var correo = Ayudas.CorreoUnico();
         await Ayudas.RegistrarAsync(_cliente, correo);
         await FallarAsync(correo, 4);
-        Assert.Equal(HttpStatusCode.OK, (await Ayudas.LoginAsync(_cliente, correo)).StatusCode);
+        // Inicio correcto = contraseña y código (fase 3). Solo eso reinicia el contador.
+        Assert.Equal(HttpStatusCode.OK, (await Ayudas.IniciarSesionCompletaAsync(_cliente, correo)).StatusCode);
         await FallarAsync(correo, 4);
 
-        Assert.Equal(HttpStatusCode.OK, (await Ayudas.LoginAsync(_cliente, correo)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Ayudas.IniciarSesionCompletaAsync(_cliente, correo)).StatusCode);
     }
 
     [Fact]
@@ -97,7 +98,7 @@ public sealed class AutenticacionAvanzadaTests : IClassFixture<ClimaPlusApiFacto
 
         _fabrica.Reloj.Adelantar(TimeSpan.FromMinutes(15));
 
-        Assert.Equal(HttpStatusCode.OK, (await Ayudas.LoginAsync(_cliente, correo)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Ayudas.IniciarSesionCompletaAsync(_cliente, correo)).StatusCode);
     }
 
     [Fact]
@@ -124,8 +125,7 @@ public sealed class AutenticacionAvanzadaTests : IClassFixture<ClimaPlusApiFacto
         var sesionB = await Ayudas.ObtenerTokenAsync(_cliente, correo, Ayudas.PasswordValida);
         Assert.Equal(HttpStatusCode.OK, (await _cliente.SendAsync(Ayudas.ConToken(HttpMethod.Get, "/api/usuarios/me", sesionB))).StatusCode);
 
-        var cambio = await _cliente.SendAsync(Ayudas.ConToken(HttpMethod.Put, "/api/usuarios/me/password", sesionA,
-            new { passwordActual = Ayudas.PasswordValida, passwordNueva = NuevaPassword }));
+        var cambio = await Ayudas.CambiarPasswordConCodigoAsync(_cliente, sesionA, correo, Ayudas.PasswordValida, NuevaPassword);
         Assert.Equal(HttpStatusCode.NoContent, cambio.StatusCode);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await _cliente.SendAsync(Ayudas.ConToken(HttpMethod.Get, "/api/usuarios/me", sesionA))).StatusCode);
@@ -188,7 +188,7 @@ public sealed class LimiteGeneralTests : IClassFixture<ClimaPlusApiFactoryLimite
     [Fact]
     public async Task RutaConSesion_SinLimitePropio_RespondeTambien429AlSuperarElLimiteGeneral()
     {
-        var (_, token) = await Ayudas.CrearUsuarioConSesionAsync(_cliente);   // 2 peticiones
+        var (_, token) = await Ayudas.CrearUsuarioConSesionAsync(_cliente);   // Ayudas.PeticionesCrearUsuarioConSesion peticiones
 
         var codigos = new List<HttpStatusCode>();
         for (var i = 0; i < ClimaPlusApiFactoryLimiteGeneral.Limite; i++)
@@ -198,6 +198,6 @@ public sealed class LimiteGeneralTests : IClassFixture<ClimaPlusApiFactoryLimite
 
         Assert.Equal(HttpStatusCode.OK, codigos[0]);
         Assert.Contains(HttpStatusCode.TooManyRequests, codigos);
-        Assert.Equal(ClimaPlusApiFactoryLimiteGeneral.Limite - 2, codigos.Count(c => c == HttpStatusCode.OK));
+        Assert.Equal(ClimaPlusApiFactoryLimiteGeneral.Limite - Ayudas.PeticionesCrearUsuarioConSesion, codigos.Count(c => c == HttpStatusCode.OK));
     }
 }

@@ -108,6 +108,12 @@ export interface Usuario {
   rol: Rol;
   activo: boolean;
   fechaCreacion: string;
+  /** Confirmó su correo con un código (autenticación segura). */
+  correoVerificado: boolean;
+  /** Tiene contraseña local. false en cuentas creadas con Google. */
+  tienePassword: boolean;
+  /** Tiene una cuenta de Google vinculada. */
+  tieneGoogle: boolean;
 }
 
 export interface LoginRequest {
@@ -133,10 +139,72 @@ export interface ActualizarPerfilRequest {
   correo: string;
 }
 
+/** POST /api/usuarios/me/password/cambio (paso 1): envía un código CAMBIAR_PASSWORD; todavía no cambia nada. */
 export interface CambiarPasswordRequest {
   passwordActual: string;
   passwordNueva: string;
+  confirmacion: string;
 }
+
+/** POST /api/usuarios/me/password/cambio/verificar (paso 2): el código más los mismos datos del paso 1. */
+export interface VerificarCambioPasswordRequest extends CambiarPasswordRequest {
+  desafio: string;
+  codigo: string;
+}
+
+// ─── Autenticación segura (contrato-auth-perfil.md, secciones 4.1 a 4.9) ─────
+
+export type PropositoDesafio =
+  | "VERIFICAR_CORREO"
+  | "INICIO_SESION"
+  | "VINCULAR_GOOGLE"
+  | "RECUPERAR_PASSWORD"
+  | "CAMBIAR_PASSWORD";
+
+/** RespuestaDesafio: 202 de registro, login (paso 1), recuperación, establecer y vincular Google. */
+export interface RespuestaDesafio {
+  desafio: string;
+  proposito: PropositoDesafio;
+  destino: string;
+  expiraEn: string;
+  reenviarEn: number;
+}
+
+/** RespuestaReenvio: 202 de POST /api/auth/reenviar-codigo (no repite el destino). */
+export interface RespuestaReenvio {
+  desafio: string;
+  proposito: PropositoDesafio;
+  expiraEn: string;
+  reenviarEn: number;
+}
+
+/** VerificarCodigoRequest: verificar-correo, login/verificar, password/verificar y google/vincular/verificar. */
+export interface VerificarCodigoRequest {
+  desafio: string;
+  codigo: string;
+}
+
+/** RespuestaPermiso: 200 de POST /api/auth/password/verificar. */
+export interface RespuestaPermiso {
+  permiso: string;
+  expiraEn: string;
+}
+
+/** RestablecerPasswordRequest: POST /api/auth/password/restablecer. */
+export interface RestablecerPasswordRequest {
+  permiso: string;
+  passwordNueva: string;
+  confirmacion: string;
+}
+
+/** RespuestaInicioGoogle: 200 de GET /api/auth/google/iniciar. */
+export interface RespuestaInicioGoogle {
+  clientId: string;
+  nonce: string;
+  expiraEn: string;
+}
+
+export type UsoGoogle = "login" | "vincular";
 
 /** Favorito (contrato-favoritos.md). */
 export interface UltimaConsulta {
@@ -248,6 +316,21 @@ export interface FiltroAlertasAdmin extends FiltroAlertas {
   desde?: string;
   hasta?: string;
   idUsuario?: number;
+}
+
+// ─── Gestión de usuarios del administrador (contrato-admin-usuarios.md, M14) ─
+
+/** UsuarioAdminResponse: mismos campos no sensibles que el perfil (nunca hash, sello, códigos ni tokens). */
+export type UsuarioAdmin = Usuario;
+
+export type EstadoCuenta = "ACTIVO" | "INACTIVO";
+
+export interface FiltroUsuariosAdmin {
+  /** Texto contenido en el nombre o el correo (sin distinguir mayúsculas). */
+  busqueda?: string;
+  rol?: Rol;
+  estado?: EstadoCuenta;
+  pagina?: number;
 }
 
 // ─── Dispositivos ESP32 (contrato-dispositivos-lecturas.md) ──────────────────

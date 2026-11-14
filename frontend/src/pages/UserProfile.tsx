@@ -5,15 +5,23 @@ import { useAuth } from "../context/auth";
 import { useNotificaciones } from "../context/notificaciones";
 import { useConsulta } from "../hooks/useConsulta";
 import { ApiError, mensajeDeError } from "../services/apiClient";
-import { actualizarPerfil, cambiarPassword, obtenerPerfil } from "../services/authService";
-import type { Usuario } from "../types/api";
+import {
+  actualizarPerfil,
+  obtenerPerfil,
+  solicitarCambioPassword,
+  verificarCambioPassword,
+} from "../services/authService";
+import type { RespuestaDesafio, Usuario } from "../types/api";
 import { fecha } from "../utils/fechas";
 import EnlaceVolver from "../components/EnlaceVolver";
+import MetodosAcceso from "../components/MetodosAcceso";
+import VerificacionCodigo from "../components/VerificacionCodigo";
 
 const POLITICA_PASSWORD = /^(?=.*\p{L})(?=.*\d).{8,128}$/u;
 
-// M16 / M17 – Perfil: GET y PUT /api/usuarios/me, PUT /api/usuarios/me/password
-// (contrato-auth-perfil.md). Rol y estado son de solo lectura.
+// M16 / M17 – Perfil: GET y PUT /api/usuarios/me y cambio de contraseña en dos pasos con código por correo
+// (POST /api/usuarios/me/password/cambio y /cambio/verificar, contrato-auth-perfil.md 4.6). Rol y estado son de solo lectura. La sección Seguridad (MetodosAcceso) muestra el método
+// de acceso y permite establecer contraseña y vincular o desvincular Google (autenticación segura, 4.7 y 4.9).
 export default function UserProfile() {
   const location = useLocation();
   const esAdministrador = location.pathname.startsWith("/admin");
@@ -40,6 +48,8 @@ export default function UserProfile() {
 
   const [mensajePassword, setMensajePassword] = useState("");
   const [cambiandoPassword, setCambiandoPassword] = useState(false);
+  // Paso 2: desafío CAMBIAR_PASSWORD (solo en memoria). Mientras exista, el modal muestra la pantalla del código.
+  const [desafioCambio, setDesafioCambio] = useState<RespuestaDesafio | null>(null);
 
   const perfil = {
     nombre: perfilServidor?.nombre ?? "",
@@ -94,9 +104,10 @@ export default function UserProfile() {
     setPasswordNueva("");
     setConfirmarPassword("");
     setMensajePassword("");
+    setDesafioCambio(null);
   };
 
-  const solicitarCambioPassword = async (e: FormEvent<HTMLFormElement>) => {
+  const enviarFormularioPassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMensajePassword("");
 
@@ -119,21 +130,46 @@ export default function UserProfile() {
 
     setCambiandoPassword(true);
     try {
-      // No se guarda ninguna contraseña en el navegador.
-      await cambiarPassword({ passwordActual, passwordNueva });
-      cerrarModalPassword();
-      // Fase 8 (OWASP A07): el backend revoca todas las sesiones al cambiar la contraseña,
-      // así que se cierra la sesión actual y se pide entrar con la contraseña nueva.
-      cerrarSesionConMensaje("Contraseña actualizada. Por seguridad, inicia sesión de nuevo con tu nueva contraseña.");
+      // Paso 1: el backend comprueba las contraseñas y envía un código al correo. Todavía no cambia nada.
+      // Las contraseñas solo viven en el estado de este modal (nunca en almacenamiento del navegador).
+      const desafio = await solicitarCambioPassword({ passwordActual, passwordNueva, confirmacion: confirmarPassword });
+      setDesafioCambio(desafio);
     } catch (error) {
       if (error instanceof ApiError) {
-        setMensajePassword(error.errorDe("passwordActual") ?? error.errorDe("passwordNueva") ?? error.message);
+        setMensajePassword(
+          error.errorDe("passwordActual") ?? error.errorDe("passwordNueva") ?? error.errorDe("confirmacion") ?? error.message
+        );
       } else {
         setMensajePassword(mensajeDeError(error, "No se pudo cambiar la contraseña."));
       }
     } finally {
       setCambiandoPassword(false);
     }
+  };
+
+  // Paso 2: con el código válido la contraseña cambia y el backend revoca todas las sesiones (también esta).
+  // Si falla, VerificacionCodigo muestra el error (ApiError) y permite reintentar o pedir otro código.
+  const confirmarCambioPassword = async (desafio: string, codigo: string) => {
+    try {
+      await verificarCambioPassword({
+        desafio,
+        codigo,
+        passwordActual,
+        passwordNueva,
+        confirmacion: confirmarPassword,
+      });
+    } catch (error) {
+      // Un error de contraseña en el paso 2 (por ejemplo, cambió entre los dos pasos) obliga a empezar de nuevo.
+      if (error instanceof ApiError && (error.errorDe("passwordActual") || error.errorDe("passwordNueva"))) {
+        setDesafioCambio(null);
+        setMensajePassword(error.errorDe("passwordActual") ?? error.errorDe("passwordNueva") ?? error.message);
+        return;
+      }
+      throw error;
+    }
+
+    cerrarModalPassword();
+    cerrarSesionConMensaje("Contraseña actualizada. Por seguridad, inicia sesión de nuevo con tu nueva contraseña.");
   };
 
   return (
@@ -254,29 +290,19 @@ export default function UserProfile() {
           <section className="user-profile-security">
             <h2>Seguridad</h2>
 
-            <div className="user-profile-security-card">
-              <div className="user-profile-security-icon">
-                <i className="bi bi-lock"></i>
-              </div>
-
-              <div className="user-profile-security-info">
-                <strong>Contraseña</strong>
-                <span>••••••••••••</span>
-                <p>
-                  Protege tu cuenta utilizando una contraseña segura.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
+            {perfilServidor && (
+              <MetodosAcceso
+                perfil={perfilServidor}
+                alCambiarPassword={() => {
                   setMostrarCambioPassword(true);
                   setMensajePassword("");
                 }}
-              >
-                Cambiar contraseña
-              </button>
-            </div>
+                alActualizarPerfil={(actualizado) => {
+                  actualizarUsuario(actualizado);
+                  consultaPerfil.actualizar(() => actualizado);
+                }}
+              />
+            )}
           </section>
         </div>
       </main>
@@ -310,7 +336,24 @@ export default function UserProfile() {
               </button>
             </div>
 
-            <form onSubmit={solicitarCambioPassword}>
+            {desafioCambio ? (
+              <VerificacionCodigo
+                desafio={desafioCambio}
+                alVerificar={confirmarCambioPassword}
+                textoBoton="Confirmar cambio"
+                textoCargando="Verificando..."
+                idCampo="cambio-password-codigo"
+                descripcion={
+                  <>
+                    Para confirmar que eres tú, te enviamos un código de 6 dígitos a <strong>{desafioCambio.destino}</strong>.
+                    Tu contraseña no cambiará hasta que lo escribas. Vence en 5 minutos.
+                  </>
+                }
+                alVolver={() => setDesafioCambio(null)}
+                textoVolver="Volver"
+              />
+            ) : (
+            <form onSubmit={enviarFormularioPassword}>
               <label>
                 Contraseña actual
                 <input
@@ -360,7 +403,7 @@ export default function UserProfile() {
 
               <div className="user-profile-modal-actions">
                 <button type="submit" disabled={cambiandoPassword}>
-                  {cambiandoPassword ? "Guardando..." : "Cambiar contraseña"}
+                  {cambiandoPassword ? "Enviando código..." : "Continuar"}
                 </button>
 
                 <button
@@ -372,9 +415,10 @@ export default function UserProfile() {
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}
     </div>
   );
-}
+}

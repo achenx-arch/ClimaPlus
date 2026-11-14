@@ -1,9 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Register.css";
-import { registrarUsuario } from "../services/authService";
+import { registrarUsuario, verificarCorreo } from "../services/authService";
 import { ApiError, mensajeDeError } from "../services/apiClient";
 import EnlaceVolver from "../components/EnlaceVolver";
+import VerificacionCodigo from "../components/VerificacionCodigo";
+import type { RespuestaDesafio } from "../types/api";
+
+// M03 – Registro con verificación de correo (contrato-auth-perfil.md 4.1 y 4.1.1): el registro responde 202 con un
+// desafío y la cuenta queda sin verificar hasta escribir el código que llega al correo. No abre sesión.
 
 export default function Register() {
   const [name, setName] = useState("");
@@ -16,6 +21,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [erroresCampo, setErroresCampo] = useState<Record<string, string>>({});
+  const [desafio, setDesafio] = useState<RespuestaDesafio | null>(null);
   const navigate = useNavigate();
 
 const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -79,21 +85,16 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
   setLoading(true);
 
   try {
-    await registrarUsuario({
+    // 202 siempre que los datos sean válidos (también si el correo ya existe: no revela cuentas).
+    const respuesta = await registrarUsuario({
       nombre: nombreLimpio,
       correo: correoLimpio,
       password,
     });
 
-    setSuccess(
-      "¡Cuenta creada correctamente! Ya puedes iniciar sesión."
-    );
-
     setPassword("");
     setConfirmPassword("");
-
-    // M03 → M02 con el mensaje "Cuenta creada, inicia sesión" (contrato-auth-perfil.md).
-    navigate("/login", { state: { mensaje: "Cuenta creada, inicia sesión." } });
+    setDesafio(respuesta);
 
   } catch (error) {
     if (error instanceof ApiError && Object.keys(error.errores).length > 0) {
@@ -155,6 +156,25 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         <div className="register-form-container">
           <EnlaceVolver to="/">Volver al Inicio</EnlaceVolver>
 
+          {desafio ? (
+            <>
+              <h2>Verifica tu correo</h2>
+              <VerificacionCodigo
+                desafio={desafio}
+                alVerificar={async (token, codigo) => {
+                  await verificarCorreo({ desafio: token, codigo });
+                  // M03 → M02: el correo quedó verificado; la sesión se abre iniciando sesión (dos pasos).
+                  navigate("/login", { state: { mensaje: "Correo verificado. Ya puedes iniciar sesión." } });
+                }}
+                textoBoton="Verificar correo"
+                textoCargando="Verificando..."
+                alVolver={() => setDesafio(null)}
+                textoVolver="Corregir mis datos"
+                idCampo="registro-codigo"
+              />
+            </>
+          ) : (
+          <>
           <h2>Crea tu cuenta</h2>
 
           <p className="register-subtitle">
@@ -297,6 +317,8 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                 {!loading && <i className="bi bi-chevron-right"></i>}
             </button>
           </form>
+          </>
+          )}
 
           <p className="register-bottom-text">
             ¿Ya tienes una cuenta?{" "}
@@ -306,4 +328,4 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
       </section>
     </main>
   );
-}
+}

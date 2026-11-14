@@ -37,8 +37,9 @@
 | Pantalla | Endpoints | Notas |
 |---|---|---|
 | M01 Inicio | — | La búsqueda abre M04 con `?q=`. La tarjeta de ejemplo sigue siendo ilustrativa |
-| M02 Login | `POST /api/auth/login` | 401 "Correo o contraseña incorrectos", 403 cuenta desactivada, 429 bloquea el botón `Retry-After` s. USUARIO → M06, ADMINISTRADOR → M13 |
-| M03 Registro | `POST /api/auth/register` | Errores por campo (400/409). Éxito → M02 con "Cuenta creada, inicia sesión" |
+| M02 Login | `POST /api/auth/login` (202, desafío) → `POST /api/auth/login/verificar` (200, JWT), `POST /api/auth/reenviar-codigo`, `GET /api/auth/google/iniciar`, `POST /api/auth/google` | Dos pasos: el token solo existe después del código. 401 "Correo o contraseña incorrectos", 403 cuenta desactivada, 429 bloquea el botón `Retry-After` s. Botón oficial de Google (oculto si la API responde 503). USUARIO → M06, ADMINISTRADOR → M13 |
+| M03 Registro | `POST /api/auth/register` (202) → `POST /api/auth/verificar-correo` (204) | Errores por campo (400/409). Tras el código → M02 con "Correo verificado. Ya puedes iniciar sesión." |
+| Recuperar contraseña | `POST /api/auth/password/solicitar` → `password/verificar` (permiso) → `password/restablecer` | Tres pasos; un permiso vencido o usado vuelve al primer paso |
 | M04 Clima actual | `GET /api/clima/ubicaciones`, `GET /api/clima/actual`, `GET`/`POST /api/favoritos` | URL `?q=` (búsqueda) y `?idUbicacion=`. Viento en m/s; sin índice UV (C2). Toast por cada `alertasGeneradas` |
 | M05 Pronóstico | `GET /api/clima/ubicaciones`, `GET /api/clima/pronostico` | Días de la API; al elegir un día se ven sus bloques de 3 h en hora local |
 | M06 Dashboard | `GET /api/favoritos`, `GET /api/alertas/contador`, `GET /api/alertas` | "Actualizar clima" consulta cada favorito. Dispositivos: "—" |
@@ -46,14 +47,14 @@
 | M08 Historial | `GET /api/historial`, `GET /api/historial/{id}` | Filtros tipo, ubicación y día (`desde` incluido, `hasta` excluido); 20 por página; "—" en PRONOSTICO; detalle y "Consultar de nuevo". Se quitaron "Limpiar historial" y el borrado de filas (la API es de solo lectura) |
 | M09 Alertas | `GET /api/alertas`, `PATCH /api/alertas/{id}/estado`, `GET /api/configuraciones-alerta` | Filtros Todas/Nuevas/Leídas en el servidor; paginación |
 | M10 Configuración | `GET`/`POST`/`PUT`/`PATCH`/`DELETE /api/configuraciones-alerta` | Ubicación: "Todas mis ubicaciones" (global) o un favorito. Se añadió "Eliminar" |
+| M14 Gestión de usuarios | `GET /api/admin/usuarios`, `PATCH /api/admin/usuarios/{id}/rol`, `PATCH /api/admin/usuarios/{id}/estado` | Búsqueda (nombre o correo), filtros de rol y estado y páginas de 20 en el servidor; "Ver", "Cambiar rol" y "Activar/Desactivar" con confirmación. En la fila propia no hay acciones de rol ni estado. Sin "Eliminar" (RN-BD-08) |
 | M15 Alertas del sistema | `GET /api/admin/alertas`, `GET /api/admin/alertas/{id}` | Filtros de estado, tipo y usuario en el servidor; ubicación sobre la página cargada. Sin "Marcar como leída" (solo lectura) |
-| M16/M17 Perfil | `GET`/`PUT /api/usuarios/me`, `PUT /api/usuarios/me/password` | Actualiza el nombre en la navbar |
+| M16/M17 Perfil | `GET`/`PUT /api/usuarios/me`, `POST /api/usuarios/me/password/cambio` y `cambio/verificar` (código por correo, 005), `POST /api/usuarios/me/password/establecer`, `POST /api/usuarios/me/google/vincular`, `vincular/verificar`, `desvincular` | Actualiza el nombre en la navbar. Métodos de acceso: cambiar o establecer contraseña, vincular y desvincular Google (reemplazan el JWT por el nuevo que entrega la API) |
 
 ## Sigue simulado (sin backend)
 
 - M11/M12 Dispositivos (ESP32, fase siguiente).
 - M13 Panel administrativo (RF-25).
-- M14 Gestión de usuarios (RF-26 a RF-28).
 - Recuperar contraseña (sin requisito aprobado).
 
 ## Pruebas

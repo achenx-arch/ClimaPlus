@@ -20,6 +20,9 @@ export const usuario: Usuario = {
   rol: "USUARIO",
   activo: true,
   fechaCreacion: "2026-10-25T19:54:00Z",
+  correoVerificado: true,
+  tienePassword: true,
+  tieneGoogle: false,
 };
 
 export const administrador: Usuario = { ...usuario, idUsuario: 1, nombre: "Admin ClimaPlus", correo: "admin@ejemplo.com", rol: "ADMINISTRADOR" };

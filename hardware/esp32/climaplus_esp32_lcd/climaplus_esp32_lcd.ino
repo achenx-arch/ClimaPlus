@@ -2,7 +2,7 @@
 //  ClimaPlus – Firmware del ESP32 · versión LCD 16x2 I2C + DHT + 3 LED (Fase 7)
 //
 //  Lee temperatura y humedad (DHT11 o DHT22), lluvia (módulo LM393, salida digital) y luz (LDR),
-//  y envía una lectura por minuto a POST /api/lecturas con la cabecera X-Device-Key.
+//  y envía una lectura cada 10 s a POST /api/lecturas con la cabecera X-Device-Key.
 //  Contrato: docs/api/contrato-dispositivos-lecturas.md
 //
 //  LED:  verde = lectura aceptada · rojo = alerta (suena el buzzer) · amarillo = error o sin WiFi
@@ -25,6 +25,7 @@
 #include <DHT.h>
 
 #include "secrets.h"   // Copia secrets.example.h como secrets.h y llena tus datos.
+#include "ca_raiz.h"   // certificados raíz de Let's Encrypt: el ESP32 valida el servidor HTTPS
 
 #ifndef TIPO_DHT
 #define TIPO_DHT DHT11
@@ -43,7 +44,7 @@ const uint8_t PIN_BUZZER      = 32;   // buzzer activo a través de un transisto
 const uint8_t PIN_BOTON       = 4;    // pulsador a GND, con INPUT_PULLUP
 
 // ---------------------------------------------------------------------- Ajustes
-const unsigned long INTERVALO_MS        = 60000UL;  // una lectura por minuto
+const unsigned long INTERVALO_MS        = 10000UL;  // una lectura cada 10 s (la API admite hasta 30 por minuto)
 const unsigned long REINTENTO_WIFI_MS   = 10000UL;
 const unsigned long PULSACION_LARGA_MS  = 2000UL;
 const unsigned long DURACION_PITIDO_MS  = 150UL;
@@ -54,8 +55,8 @@ const uint16_t      TIMEOUT_HTTP_MS     = 8000;
 const bool LLUVIA_ACTIVA_EN_BAJO = true;
 
 // Calibración del LDR (valores crudos del ADC, 0–4095): mira el monitor serie tapando y destapando el sensor.
-const int LDR_OSCURO = 200;
-const int LDR_LUZ    = 3800;
+const int LDR_OSCURO = 50;
+const int LDR_LUZ    = 800;
 
 // ---------------------------------------------------------------------- Objetos
 LiquidCrystal_I2C *lcd = nullptr;   // la dirección (0x27 o 0x3F) se detecta al arrancar
@@ -103,10 +104,12 @@ void leds(bool rojo, bool verde, bool amarillo) {
   digitalWrite(PIN_LED_VERDE, verde ? HIGH : LOW);
   digitalWrite(PIN_LED_AMARILLO, amarillo ? HIGH : LOW);
 }
-void ledEnviando() { leds(false, true,  true);  }
+// VERDE = OK · AMARILLO = ALERTA (valor fuera del rango configurado) · ROJO = ERROR (sensor, WiFi, API o dispositivo).
+// Prioridad: ERROR > ALERTA > OK.
+void ledEnviando() { leds(false, true,  false); }
 void ledOk()       { leds(false, true,  false); }
-void ledAlerta()   { leds(true,  false, false); }
-void ledError()    { leds(false, false, true);  }
+void ledAlerta()   { leds(false, false, true);  }
+void ledError()    { leds(true,  false, false); }
 
 void pitar(int veces) {
   cambiosBuzzer = veces * 2;
@@ -250,7 +253,12 @@ void enviarLectura() {
 
   HTTPClient http;
   http.setTimeout(TIMEOUT_HTTP_MS);
-  http.begin(API_URL);
+  // HTTPS: valida el certificado del servidor contra CA_RAIZ (nunca setInsecure). HTTP solo para pruebas en la red local.
+  if (strncmp(API_URL, "https://", 8) == 0) {
+    http.begin(API_URL, CA_RAIZ);
+  } else {
+    http.begin(API_URL);
+  }
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Key", DEVICE_KEY);   // la clave nunca se imprime por el monitor serie
   const char* cabeceras[] = { "Retry-After" };
@@ -295,6 +303,12 @@ void enviarLectura() {
     Serial.println(respuesta);
   } else {
     ultimoEstado = codigo > 0 ? "Error de la API" : "Sin respuesta";
+    ledError();
+  }
+
+  // Prioridad ERROR > ALERTA > OK: si el DHT no dio lectura, el LED queda en rojo aunque la API aceptara el resto.
+  if (codigo == 201 && (!ultimaLectura.tieneTemperatura || !ultimaLectura.tieneHumedad)) {
+    ultimoEstado = "Error sensor DHT";
     ledError();
   }
 

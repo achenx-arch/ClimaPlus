@@ -19,6 +19,17 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.22" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <!-- Autenticación segura: envío de códigos por SMTP. 4.16+ corrige GHSA-9j88-vvj5-vhgr (MailKit) y trae
+         MimeKit sin GHSA-g7hc-96xr-gvvx. -->
+    <PackageReference Include="MailKit" Version="4.18.1" />
+    <!-- Fija la versión corregida de la dependencia transitiva de MimeKit. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+  </ItemGroup>
+
+  <!-- Despliegue: la configuración local (con secretos de desarrollo) nunca se copia a la carpeta de dotnet publish.
+       En producción todo llega por variables de entorno (deploy/azure/climaplus-api.env.example). -->
+  <ItemGroup>
+    <Content Update="appsettings.Development.json;appsettings.Local.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

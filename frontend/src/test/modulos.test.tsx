@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import Navbar from "../components/Navbar";
 import AdminAlerts from "../pages/AdminAlerts";
+import AdminUsers from "../pages/AdminUsers";
 import AlertSettings from "../pages/AlertSettings";
 import Alerts from "../pages/Alerts";
 import Favorites from "../pages/Favorites";
@@ -26,6 +27,30 @@ import {
 } from "./datos";
 import { conSesion, renderizar } from "./renderizar";
 import { crearServidor, problema } from "./servidorFalso";
+
+const desafioCambio = () => ({
+  status: 202,
+  cuerpo: {
+    desafio: "desafio.cambio",
+    proposito: "CAMBIAR_PASSWORD",
+    destino: "a***@ejemplo.com",
+    expiraEn: new Date(Date.now() + 300_000).toISOString(),
+    reenviarEn: 60,
+  },
+});
+
+async function llenarCambioPassword(
+  usuarioEvento: ReturnType<typeof userEvent.setup>,
+  actual: string,
+  nueva = "NuevaClave2027",
+  confirmacion = nueva
+) {
+  await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar contraseña" }));
+  await usuarioEvento.type(screen.getByLabelText("Contraseña actual"), actual);
+  await usuarioEvento.type(screen.getByLabelText("Nueva contraseña"), nueva);
+  await usuarioEvento.type(screen.getByLabelText("Confirmar nueva contraseña"), confirmacion);
+  await usuarioEvento.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Continuar" }));
+}
 
 function servidorConSesion(u = usuario, nuevas = 0) {
   const servidor = crearServidor();
@@ -387,6 +412,135 @@ describe("M15 – alertas del sistema (administrador)", () => {
   });
 });
 
+describe("M14 – gestión de usuarios (administrador)", () => {
+  const ana = usuario;
+  const luis = { ...usuario, idUsuario: 13, nombre: "Luis Pérez", correo: "luis@ejemplo.com", activo: false, tieneGoogle: true, tienePassword: false };
+
+  function servidorUsuarios() {
+    return servidorConSesion(administrador).en("GET", "/api/admin/usuarios", (p) => {
+      const estado = p.url.searchParams.get("estado");
+      const lista = [administrador, ana, luis].filter(
+        (u) => estado === null || (estado === "ACTIVO") === u.activo
+      );
+      return { cuerpo: pagina(lista, { totalElementos: lista.length }) };
+    });
+  }
+
+  it("RF-26: lista, contadores y búsqueda/filtros enviados al servidor; sin datos sensibles ni borrado", async () => {
+    const servidor = servidorUsuarios();
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    expect(await screen.findByText("ana.lopez@ejemplo.com")).toBeInTheDocument();
+    expect(await screen.findByText("3 registrados · 2 activos · 1 inactivos")).toBeInTheDocument();
+    expect(screen.getByText("Inactivo")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Eliminar/ })).not.toBeInTheDocument();
+    // En la fila propia no hay acciones de rol ni de estado.
+    expect(screen.queryByRole("button", { name: "Cambiar rol de Admin ClimaPlus" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desactivar a Admin ClimaPlus" })).not.toBeInTheDocument();
+    expect(screen.getByText("Tu cuenta")).toBeInTheDocument();
+
+    await usuarioEvento.type(screen.getByLabelText("Buscar usuario"), "  luis  ");
+    await usuarioEvento.click(screen.getByRole("button", { name: "Buscar" }));
+    await waitFor(() =>
+      expect(servidor.a("/api/admin/usuarios").some((p) => p.url.searchParams.get("busqueda") === "luis")).toBe(true)
+    );
+    await usuarioEvento.selectOptions(screen.getByLabelText("Rol"), "ADMINISTRADOR");
+    await usuarioEvento.click(screen.getByRole("button", { name: "Inactivos" }));
+    await waitFor(() =>
+      expect(
+        servidor
+          .a("/api/admin/usuarios")
+          .some(
+            (p) =>
+              p.url.searchParams.get("busqueda") === "luis" &&
+              p.url.searchParams.get("rol") === "ADMINISTRADOR" &&
+              p.url.searchParams.get("estado") === "INACTIVO" &&
+              p.url.searchParams.get("pagina") === "1"
+          )
+      ).toBe(true)
+    );
+    expect(servidor.a("/api/admin/usuarios").every((p) => p.encabezados.authorization !== undefined)).toBe(true);
+  });
+
+  it("RF-27: cambia el rol con confirmación y avisa que se cierran las sesiones", async () => {
+    const servidor = servidorUsuarios().en("PATCH", "/api/admin/usuarios/12/rol", {
+      cuerpo: { ...ana, rol: "ADMINISTRADOR" },
+    });
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar rol de Ana López" }));
+    const dialogo = screen.getByRole("dialog", { name: "Cambiar rol" });
+    expect(within(dialogo).getByText(/Se cerrarán todas las sesiones/)).toBeInTheDocument();
+    expect(within(dialogo).getByRole("button", { name: "Guardar rol" })).toBeDisabled();   // mismo rol
+    await usuarioEvento.click(within(dialogo).getByLabelText("Administrador"));
+    await usuarioEvento.click(within(dialogo).getByRole("button", { name: "Guardar rol" }));
+
+    expect(await screen.findByText("Ana López ahora tiene el rol Administrador.")).toBeInTheDocument();
+    expect(servidor.a("/api/admin/usuarios/12/rol", "PATCH")[0].cuerpo).toEqual({ rol: "ADMINISTRADOR" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("RF-27/RN-BD-09: muestra el error 409 del servidor sin cerrar la ventana", async () => {
+    servidorUsuarios().en(
+      "PATCH",
+      "/api/admin/usuarios/13/rol",
+      problema(409, "Es el último administrador activo: no se puede degradar (RN-BD-09).", { rol: ["Es el último administrador activo: no se puede degradar (RN-BD-09)."] })
+    );
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar rol de Luis Pérez" }));
+    const dialogo = screen.getByRole("dialog", { name: "Cambiar rol" });
+    await usuarioEvento.click(within(dialogo).getByLabelText("Administrador"));
+    await usuarioEvento.click(within(dialogo).getByRole("button", { name: "Guardar rol" }));
+
+    expect(await within(dialogo).findByRole("alert")).toHaveTextContent(/último administrador activo/);
+    expect(screen.getByRole("dialog", { name: "Cambiar rol" })).toBeInTheDocument();
+  });
+
+  it("RF-28: desactiva y activa con confirmación", async () => {
+    const servidor = servidorUsuarios()
+      .en("PATCH", "/api/admin/usuarios/12/estado", { cuerpo: { ...ana, activo: false } })
+      .en("PATCH", "/api/admin/usuarios/13/estado", { cuerpo: { ...luis, activo: true } });
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Desactivar a Ana López" }));
+    const confirmacion = screen.getByRole("dialog", { name: "Desactivar cuenta" });
+    expect(within(confirmacion).getByText(/No podrá iniciar sesión/)).toBeInTheDocument();
+    await usuarioEvento.click(within(confirmacion).getByRole("button", { name: "Desactivar" }));
+    expect(await screen.findByText("La cuenta de Ana López quedó desactivada.")).toBeInTheDocument();
+    expect(servidor.a("/api/admin/usuarios/12/estado", "PATCH")[0].cuerpo).toEqual({ activo: false });
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Activar a Luis Pérez" }));
+    await usuarioEvento.click(within(screen.getByRole("dialog", { name: "Activar cuenta" })).getByRole("button", { name: "Activar" }));
+    expect(await screen.findByText("La cuenta de Luis Pérez está activa.")).toBeInTheDocument();
+    expect(servidor.a("/api/admin/usuarios/13/estado", "PATCH")[0].cuerpo).toEqual({ activo: true });
+  });
+
+  it("el detalle muestra métodos de acceso sin datos sensibles y se cierra con Escape", async () => {
+    servidorUsuarios();
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+    const usuarioEvento = userEvent.setup();
+
+    await usuarioEvento.click(await screen.findByRole("button", { name: "Ver Luis Pérez" }));
+    const dialogo = screen.getByRole("dialog", { name: "Detalle del usuario" });
+    expect(within(dialogo).getByText("Google")).toBeInTheDocument();
+    expect(within(dialogo).queryByText(/hash|sello|token/i)).not.toBeInTheDocument();
+    await usuarioEvento.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("un error de la API se muestra en la tabla", async () => {
+    servidorConSesion(administrador).en("GET", "/api/admin/usuarios", problema(403, "No tienes permiso para esta operación."));
+    renderizar(<AdminUsers />, { ruta: "/admin/usuarios" });
+
+    expect(await screen.findByText("No tienes permiso para esta operación.")).toBeInTheDocument();
+  });
+});
+
 describe("M16 – perfil", () => {
   it("muestra el perfil real y guarda nombre y correo con PUT", async () => {
     const servidor = servidorConSesion()
@@ -405,45 +559,107 @@ describe("M16 – perfil", () => {
     expect(screen.getAllByText("Ana María López").length).toBeGreaterThan(0);
   });
 
-  it("cambia la contraseña con PUT /api/usuarios/me/password y muestra el error del campo", async () => {
+  it("paso 1 del cambio de contraseña: POST /cambio con confirmación y muestra el error del campo", async () => {
     const servidor = servidorConSesion()
       .en("GET", "/api/usuarios/me", { cuerpo: usuario })
-      .en("PUT", "/api/usuarios/me/password", problema(400, "x", { passwordActual: ["La contraseña actual no es correcta."] }));
+      .en("POST", "/api/usuarios/me/password/cambio", problema(400, "x", { passwordActual: ["La contraseña actual no es correcta."] }));
     renderizar(<UserProfile />, { ruta: "/perfil" });
     const usuarioEvento = userEvent.setup();
 
-    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar contraseña" }));
-    await usuarioEvento.type(screen.getByLabelText("Contraseña actual"), "Mala2026");
-    await usuarioEvento.type(screen.getByLabelText("Nueva contraseña"), "NuevaClave2027");
-    await usuarioEvento.type(screen.getByLabelText("Confirmar nueva contraseña"), "NuevaClave2027");
-    await usuarioEvento.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cambiar contraseña" }));
+    await llenarCambioPassword(usuarioEvento, "Mala2026");
 
     expect(await screen.findByText("La contraseña actual no es correcta.")).toBeInTheDocument();
-    expect(servidor.a("/api/usuarios/me/password", "PUT")[0].cuerpo).toEqual({
+    expect(servidor.a("/api/usuarios/me/password/cambio", "POST")[0].cuerpo).toEqual({
       passwordActual: "Mala2026",
       passwordNueva: "NuevaClave2027",
+      confirmacion: "NuevaClave2027",
     });
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")).toHaveLength(0);
+    expect(screen.queryByLabelText("Código de verificación")).not.toBeInTheDocument();
+  });
+
+  it("valida en el navegador que la confirmación coincida antes de llamar a la API", async () => {
+    const servidor = servidorConSesion().en("GET", "/api/usuarios/me", { cuerpo: usuario });
+    renderizar(<UserProfile />, { ruta: "/perfil" });
+    const usuarioEvento = userEvent.setup();
+
+    await llenarCambioPassword(usuarioEvento, "Actual2026", "NuevaClave2027", "OtraClave2027");
+
+    expect(await screen.findByText("Las contraseñas nuevas no coinciden.")).toBeInTheDocument();
+    expect(servidor.a("/api/usuarios/me/password/cambio", "POST")).toHaveLength(0);
+  });
+
+  it("un código incorrecto en el paso 2 muestra el error y no cierra la sesión", async () => {
+    const servidor = servidorConSesion()
+      .en("GET", "/api/usuarios/me", { cuerpo: usuario })
+      .en("POST", "/api/usuarios/me/password/cambio", desafioCambio())
+      .en(
+        "POST",
+        "/api/usuarios/me/password/cambio/verificar",
+        problema(400, "x", { codigo: ["El código no es válido o ya venció. Revisa tu correo o pide uno nuevo."] })
+      );
+    renderizar(<UserProfile />, { ruta: "/perfil" });
+    const usuarioEvento = userEvent.setup();
+
+    await llenarCambioPassword(usuarioEvento, "Actual2026");
+    await usuarioEvento.type(await screen.findByLabelText("Código de verificación"), "111111");
+    await usuarioEvento.click(screen.getByRole("button", { name: /Confirmar cambio/ }));
+
+    expect(await screen.findByText(/El código no es válido o ya venció/)).toBeInTheDocument();
+    expect(sessionStorage.getItem(CLAVE_SESION)).not.toBeNull();
+    expect(screen.getByTestId("ruta")).toHaveTextContent("/perfil");
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")).toHaveLength(1);
+  });
+
+  it("Volver desde la pantalla del código regresa al formulario sin cambiar nada", async () => {
+    const servidor = servidorConSesion()
+      .en("GET", "/api/usuarios/me", { cuerpo: usuario })
+      .en("POST", "/api/usuarios/me/password/cambio", desafioCambio());
+    renderizar(<UserProfile />, { ruta: "/perfil" });
+    const usuarioEvento = userEvent.setup();
+
+    await llenarCambioPassword(usuarioEvento, "Actual2026");
+    await screen.findByLabelText("Código de verificación");
+    await usuarioEvento.click(screen.getByRole("button", { name: "Volver" }));
+
+    expect(await screen.findByLabelText("Contraseña actual")).toBeInTheDocument();
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")).toHaveLength(0);
   });
 });
 
 describe("seguridad – Fase 8", () => {
-  it("al cambiar la contraseña cierra la sesión porque el backend revoca los tokens", async () => {
+  it("cambia la contraseña solo con el código del correo y después cierra la sesión", async () => {
     const servidor = servidorConSesion()
       .en("GET", "/api/usuarios/me", { cuerpo: usuario })
-      .en("PUT", "/api/usuarios/me/password", { status: 204 });
+      .en("POST", "/api/usuarios/me/password/cambio", desafioCambio())
+      .en("POST", "/api/usuarios/me/password/cambio/verificar", { status: 204 });
     renderizar(<UserProfile />, { ruta: "/perfil" });
     const usuarioEvento = userEvent.setup();
 
-    await usuarioEvento.click(await screen.findByRole("button", { name: "Cambiar contraseña" }));
-    await usuarioEvento.type(screen.getByLabelText("Contraseña actual"), "Actual2026");
-    await usuarioEvento.type(screen.getByLabelText("Nueva contraseña"), "NuevaClave2027");
-    await usuarioEvento.type(screen.getByLabelText("Confirmar nueva contraseña"), "NuevaClave2027");
-    await usuarioEvento.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cambiar contraseña" }));
+    await llenarCambioPassword(usuarioEvento, "Actual2026");
+
+    // Paso 1: todavía no se cambió nada y la sesión sigue abierta.
+    expect(await screen.findByText(/te enviamos un código de 6 dígitos a/)).toBeInTheDocument();
+    expect(screen.getByText("a***@ejemplo.com")).toBeInTheDocument();
+    expect(sessionStorage.getItem(CLAVE_SESION)).not.toBeNull();
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")).toHaveLength(0);
+
+    // Paso 2: con el código se confirma el cambio.
+    await usuarioEvento.type(screen.getByLabelText("Código de verificación"), "482913");
+    await usuarioEvento.click(screen.getByRole("button", { name: /Confirmar cambio/ }));
 
     await waitFor(() => expect(screen.getByTestId("ruta")).toHaveTextContent("/login"));
     expect(screen.getByText("Pantalla de inicio de sesión")).toBeInTheDocument();
     expect(sessionStorage.getItem(CLAVE_SESION)).toBeNull();
-    expect(servidor.a("/api/usuarios/me/password", "PUT")).toHaveLength(1);
+    expect(servidor.a("/api/usuarios/me/password/cambio/verificar", "POST")[0].cuerpo).toEqual({
+      desafio: "desafio.cambio",
+      codigo: "482913",
+      passwordActual: "Actual2026",
+      passwordNueva: "NuevaClave2027",
+      confirmacion: "NuevaClave2027",
+    });
+    // El endpoint antiguo (PUT sin código) ya no se usa.
+    expect(servidor.a("/api/usuarios/me/password", "PUT")).toHaveLength(0);
   });
 });
 
