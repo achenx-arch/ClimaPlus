@@ -41,8 +41,14 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mailpit:
+        image: axllent/mailpit:v1.33.1
+        ports:
+          - 1025:1025
+          - 8025:8025
     env:
       DOTNET_NOLOGO: true
+      MAILPIT_URL: http://localhost:8025
       DOTNET_CLI_TELEMETRY_OPTOUT: true
       # Base aislada que termina en _test (las pruebas se niegan a usar otra).
       CLIMAPLUS_TEST_DB: Host=localhost;Port=5432;Database=climaplus_test;Username=postgres;Password=postgres
