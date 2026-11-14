@@ -11,6 +11,18 @@ services:
     image: ghcr.io/achenx-arch/climaplus-api:${VERSION:-latest}
     build: !reset null
     pull_policy: always
+    # Fase 7: en el servidor el correo es obligatorio y explícito. Sin estas variables, "docker compose up" se detiene
+    # con un mensaje claro (antes se usaba "mailpit" por defecto, que en el servidor no existe, y los códigos nunca
+    # llegaban). Valores por proveedor: docs/despliegue/correo-smtp.md.
+    environment:
+      Correo__Host: ${SMTP_HOST:?Define SMTP_HOST en .env (por ejemplo smtp.gmail.com o smtp-relay.brevo.com)}
+      Correo__Puerto: ${SMTP_PORT:?Define SMTP_PORT en .env (587 con StartTls o 465 con SslAlConectar)}
+      Correo__Remitente: ${SMTP_FROM:?Define SMTP_FROM en .env (remitente verificado en tu proveedor)}
+      Correo__Seguridad: ${SMTP_SEGURIDAD:?Define SMTP_SEGURIDAD en .env (StartTls o SslAlConectar)}
+
+  # En el servidor los correos salen por el SMTP real (SMTP_* en .env): Mailpit no se levanta.
+  mailpit:
+    profiles: ["solo-desarrollo"]
 
   web:
     image: ghcr.io/achenx-arch/climaplus-web:${VERSION:-latest}
