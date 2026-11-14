@@ -22,6 +22,8 @@
     <!-- Autenticación segura: envío de códigos por SMTP. 4.16+ corrige GHSA-9j88-vvj5-vhgr (MailKit) y trae
          MimeKit sin GHSA-g7hc-96xr-gvvx. -->
     <PackageReference Include="MailKit" Version="4.18.1" />
+    <!-- Fija la versión corregida de la dependencia transitiva de MimeKit. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
   <!-- Despliegue: la configuración local (con secretos de desarrollo) nunca se copia a la carpeta de dotnet publish.
