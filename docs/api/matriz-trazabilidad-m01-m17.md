@@ -35,7 +35,7 @@
 | M11 Mis dispositivos | Usuario | RF-20, RF-21, RF-22 | Backend verificado (488 pruebas en Windows); frontend conectado a la API real, sin verificar en Windows (`test/dispositivos.test.tsx`) | — |
 | M12 Detalle dispositivo | Usuario | RF-22, RF-23 | Backend verificado (488 pruebas en Windows); frontend conectado a la API real, sin verificar en Windows (`test/dispositivos.test.tsx`) | — |
 | M13 Dashboard administrador | Administrador | RF-25 | No implementado | Datos de consultas (E-02/E-03) y dispositivos |
-| M14 Gestión de usuarios | Administrador | RF-26, RF-27, RF-28 | No implementado | Ninguno técnico (usa la tabla `usuario`) |
+| M14 Gestión de usuarios | Administrador | RF-26, RF-27, RF-28 | Implementado (backend y frontend); pruebas escritas, pendientes de `dotnet test` en Windows (`contrato-admin-usuarios.md`) | — |
 | M15 Alertas del sistema | Administrador | RF-29 | Verificado (221 pruebas); alertas reales con el motor 2H, sin verificar | — |
 | M16 Mi perfil (usuario) | Usuario | RF-31, RF-32, RF-33 | Verificado (Fase 2D) | — |
 | M17 Mi perfil (administrador) | Administrador | RF-31, RF-32, RF-33 | Verificado (Fase 2D) | — |
@@ -74,15 +74,15 @@
 | M12 | RF-23 Detalle, lecturas y alertas | `GET /api/dispositivos/{id}`, `GET /api/dispositivos/{id}/lecturas`, `GET /api/dispositivos/{id}/alertas` | Autenticado (dueño) | Implementado, sin verificar | `Dispositivos/DispositivosTests`, `Dispositivos/LecturasTests` | Paginación de 20 |
 | — | RF-24 Recibir lecturas del ESP32 | `POST /api/lecturas` con `X-Device-Key` | Dispositivo | Implementado, sin verificar | `Dispositivos/LecturasTests`, `Alertas/EvaluadorAlertasLecturaTests`, `Datos/LecturasPostgreSqlTests` | Genera alertas (RN-BD-33); rate limiting 30/min por dispositivo |
 | M13 | RF-25 Estadísticas | `GET /api/admin/estadisticas?periodo=` | Administrador | No implementado | — | Consultas por periodo y top 5 dependen de E-02/E-03; dispositivos |
-| M14 | RF-26 Listar y filtrar usuarios | `GET /api/admin/usuarios` | Administrador | No implementado | — | Sin bloqueo técnico; paginación de 20 |
-| M14 | RF-27 Cambiar rol | `PATCH /api/admin/usuarios/{id}/rol` | Administrador | No implementado | — | RN-BD-09: no degradar al último administrador activo |
-| M14 | RF-28 Activar/desactivar usuario | `PATCH /api/admin/usuarios/{id}/estado` | Administrador | No implementado | — | RN-BD-09; RN-BD-08 (sin borrado físico) |
+| M14 | RF-26 Listar y filtrar usuarios | `GET /api/admin/usuarios?busqueda=&rol=&estado=&pagina=` | Administrador | Implementado | `Admin/AdminUsuariosTests`, `Datos/AdminUsuariosPostgreSqlTests` (sin ejecutar) | Paginación de 20; búsqueda por nombre o correo |
+| M14 | RF-27 Cambiar rol | `PATCH /api/admin/usuarios/{id}/rol` | Administrador | Implementado | `Admin/AdminUsuariosTests` (sin ejecutar) | RN-BD-09; no quitarse el propio rol; renueva el sello |
+| M14 | RF-28 Activar/desactivar usuario | `PATCH /api/admin/usuarios/{id}/estado` | Administrador | Implementado | `Admin/AdminUsuariosTests` (sin ejecutar) | RN-BD-09; RN-BD-08 (sin borrado físico); no desactivar la propia cuenta; renueva el sello |
 | M15 | RF-29 Alertas del sistema | `GET /api/admin/alertas?tipo=&estado=&origen=&desde=&hasta=&idUsuario=&pagina=` | Administrador | Verificado | `Alertas/AlertasTests` | Con alertas reales desde 2H; buscar usuario por nombre/correo vendrá con RF-26 |
 | M15 | RF-29 Detalle | `GET /api/admin/alertas/{id}` | Administrador | Verificado | ídem | — |
 | — | RF-30 Proteger rutas públicas | Rate limiting de `/api/clima/*` (30/min) e `IMemoryCache` de búsquedas | — | Verificado | `ClimaRateLimitingTests` | — |
 | M16, M17 | RF-31 Ver perfil | `GET /api/usuarios/me` | Autenticado | Verificado | `PerfilTests` | — |
 | M16, M17 | RF-32 Editar nombre y correo | `PUT /api/usuarios/me` | Autenticado | Verificado | `PerfilTests` | RN-BD-37, RN-BD-38 |
-| M16, M17 | RF-33 Cambiar contraseña | `PUT /api/usuarios/me/password` | Autenticado | Verificado | `PerfilTests` | Rate limiting de autenticación |
+| M16, M17 | RF-33 Cambiar contraseña (con código por correo, migración 005) | `POST /api/usuarios/me/password/cambio` y `/cambio/verificar` | Autenticado | Verificado | `PerfilTests`, `CambioPasswordConCodigoTests` | Rate limiting de autenticación y de códigos; bloqueo por cuenta + IP |
 
 ## Pendientes agrupados por dependencia
 
@@ -91,7 +91,7 @@
 | Clima persistido | RF-05, RF-06 | Verificado (2E) | — |
 | Historial | RF-11 | Verificado (2G) | — |
 | Motor de alertas | RF-16, RF-24 | Implementado para ambos orígenes (consulta 2H, lectura Fase 7) | — |
-| Gestión de usuarios | RF-26, RF-27, RF-28 | **Sí**: usa solo la tabla `usuario` | — |
+| Gestión de usuarios | RF-26, RF-27, RF-28 | Implementado (sin migración: solo la tabla `usuario`) | `dotnet test` en Windows |
 | Dispositivos | RF-20 a RF-23 | Backend y pantallas M11/M12 implementados (Fase 7) | Verificar M11/M12 en Windows |
 | Lecturas ESP32 | RF-24 | Backend y firmware implementados (Fase 7, `hardware/esp32`) | Prueba con la placa real |
 | Estadísticas | RF-25 | Sí (usuarios, consultas y alertas); dispositivos cuando exista RF-20 | — |
@@ -99,7 +99,7 @@
 ## Funciones pendientes por tipo
 
 - **Dispositivos ESP32:** RF-20 a RF-24 con backend implementado en la Fase 7 (`contrato-dispositivos-lecturas.md`). Pantallas M11/M12 conectadas a la API y firmware en `hardware/esp32` (compila con el paquete esp32 3.0.7). Falta la prueba con la placa real.
-- **Administración:** RF-26 a RF-28 (M14). Nada implementado; RF-29 (M15) implementado sin verificar.
+- **Administración:** RF-26 a RF-28 (M14) implementados (backend, pantalla y pruebas escritas; falta ejecutar `dotnet test`). RF-29 (M15) verificado.
 - **Estadísticas:** RF-25 (M13). Nada implementado.
 - **Usuario:** RF-16 (motor) implementado sin verificar; falta su origen ESP32. RF-19 (M06) parcial.
 

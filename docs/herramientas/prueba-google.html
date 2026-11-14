@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prueba de Google</title>
+  <!--
+    Herramienta SOLO de desarrollo (fase 5) para probar "Continuar con Google" directamente contra la API, sin el
+    frontend. Desde la fase 6 el frontend ya tiene el botón; esta página queda para aislar fallas de la API.
+    No es parte del frontend ni se despliega.
+    Uso: en esta carpeta, `python -m http.server 5173` y abrir http://localhost:5173/prueba-google.html
+    El origen http://localhost:5173 debe estar en "Orígenes autorizados de JavaScript" del cliente OAuth y en
+    Cors:OrigenesPermitidos de la API (ya lo está en appsettings.json).
+    Nunca muestra el ID token de Google ni el JWT completos.
+  -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root { color-scheme: light dark; --borde: #8aa4b4; }
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 0; padding: 16px; max-width: 760px; margin-inline: auto; }
+    fieldset { border: 1px solid var(--borde); border-radius: 8px; margin: 0 0 16px; padding: 12px 16px; }
+    label { display: block; margin: 8px 0 4px; font-weight: 600; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; }
+    button { margin-top: 10px; padding: 6px 14px; font: inherit; cursor: pointer; }
+    pre { white-space: pre-wrap; word-break: break-all; background: rgba(127,127,127,.12); padding: 10px; border-radius: 6px; }
+    .nota { font-size: 13px; opacity: .8; }
+  </style>
+</head>
+<body>
+  <h1>Prueba de "Continuar con Google"</h1>
+  <p class="nota">Herramienta de desarrollo. La API valida el ID token; esta página solo lo reenvía.</p>
+
+  <fieldset>
+    <legend>API</legend>
+    <label for="api">URL base de la API</label>
+    <input id="api" value="http://localhost:5208">
+  </fieldset>
+
+  <fieldset>
+    <legend>1. Iniciar sesión con Google</legend>
+    <button id="preparar">Preparar botón de Google</button>
+    <div id="boton" style="margin-top:12px"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. Vincular Google a una cuenta local (con sesión)</legend>
+    <label for="jwt">JWT de ClimaPlus (del login local en dos pasos)</label>
+    <input id="jwt" autocomplete="off">
+    <label for="password">Contraseña actual</label>
+    <input id="password" type="password" autocomplete="current-password">
+    <button id="prepararVincular">Preparar botón para vincular</button>
+    <div id="botonVincular" style="margin-top:12px"></div>
+    <label for="codigo">Código recibido en el correo (Mailpit)</label>
+    <input id="codigo" inputmode="numeric" maxlength="6">
+    <button id="confirmar">Confirmar vinculación</button>
+  </fieldset>
+
+  <h2>Resultado</h2>
+  <pre id="salida">—</pre>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let desafioVinculacion = null;
+
+    function mostrar(estado, cuerpo) {
+      // Recorta los tokens: nunca se muestran completos.
+      const texto = JSON.stringify(cuerpo, (clave, valor) =>
+        (clave === "token" || clave === "desafio") && typeof valor === "string" ? valor.slice(0, 12) + "…(recortado)" : valor, 2);
+      $("salida").textContent = `HTTP ${estado}\n${texto ?? ""}`;
+    }
+
+    async function llamar(metodo, ruta, cuerpo, jwt) {
+      const cabeceras = { "Content-Type": "application/json" };
+      if (jwt) cabeceras.Authorization = `Bearer ${jwt}`;
+      const respuesta = await fetch($("api").value.replace(/\/$/, "") + ruta, {
+        method: metodo, headers: cabeceras, body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+      });
+      const datos = respuesta.status === 204 ? null : await respuesta.json().catch(() => null);
+      mostrar(respuesta.status, datos);
+      return { estado: respuesta.status, datos };
+    }
+
+    // Cada nonce de la API sirve para UN intento y vence a los 10 minutos. Por eso, después de cada intento (salga
+    // bien o mal) se pide otro nonce y se vuelve a dibujar el botón: si se pulsa el mismo botón otra vez con el nonce
+    // ya usado, la API responde 401 (motivo=nonce_invalido en su consola), que es lo correcto.
+    let procesando = false;
+
+    async function prepararBoton(uso, contenedor, alRecibir) {
+      const jwt = uso === "vincular" ? $("jwt").value.trim() : null;
+      const { estado, datos } = await llamar("GET", `/api/auth/google/iniciar?uso=${uso}`, null, jwt);
+      if (estado !== 200) return;
+      if (!window.google?.accounts?.id) {
+        $("salida").textContent = "No cargó el script de Google (https://accounts.google.com/gsi/client). Revisa la conexión o el bloqueador.";
+        return;
+      }
+      google.accounts.id.initialize({
+        client_id: datos.clientId,
+        nonce: datos.nonce,                 // la API lo emitió y lo exigirá dentro del ID token
+        auto_select: false,
+        ux_mode: "popup",
+        callback: async (r) => {
+          if (procesando) return;           // un solo envío por credencial
+          procesando = true;
+          try {
+            await alRecibir(r.credential);
+          } finally {
+            procesando = false;
+            // Nonce nuevo para el siguiente intento; la credencial anterior no se guarda ni se reutiliza.
+            prepararBoton(uso, contenedor, alRecibir);
+          }
+        },
+      });
+      $(contenedor).innerHTML = "";
+      google.accounts.id.renderButton($(contenedor), { theme: "outline", size: "large", text: "continue_with", locale: "es" });
+    }
+
+    $("preparar").onclick = () => prepararBoton("login", "boton",
+      (credencial) => llamar("POST", "/api/auth/google", { credencial }));
+
+    $("prepararVincular").onclick = () => prepararBoton("vincular", "botonVincular", async (credencial) => {
+      const { estado, datos } = await llamar("POST", "/api/usuarios/me/google/vincular",
+        { credencial, passwordActual: $("password").value }, $("jwt").value.trim());
+      if (estado === 202) desafioVinculacion = datos.desafio;
+    });
+
+    $("confirmar").onclick = async () => {
+      if (!desafioVinculacion) { $("salida").textContent = "Primero completa el paso de vincular."; return; }
+      const { estado, datos } = await llamar("POST", "/api/usuarios/me/google/vincular/verificar",
+        { desafio: desafioVinculacion, codigo: $("codigo").value.trim() }, $("jwt").value.trim());
+      if (estado === 200) $("jwt").value = datos.token;   // la vinculación cierra las demás sesiones y entrega una nueva
+    };
+  </script>
+</body>
+</html>

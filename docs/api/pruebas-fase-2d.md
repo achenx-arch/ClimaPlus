@@ -36,6 +36,11 @@ $bytes = New-Object byte[] 48
 [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
 dotnet user-secrets set "Jwt:Clave" ([Convert]::ToBase64String($bytes))
 
+# Clave HMAC de los códigos enviados por correo (autenticación segura): otra clave distinta de la del JWT
+$bytes = New-Object byte[] 48
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+dotnet user-secrets set "Codigos:ClaveHmac" ([Convert]::ToBase64String($bytes))
+
 # Opcional: administrador inicial (se crea al arrancar si no existe ningún administrador)
 dotnet user-secrets set "AdminInicial:Nombre" "Administrador ClimaPlus"
 dotnet user-secrets set "AdminInicial:Correo" "admin@ejemplo.com"
@@ -61,10 +66,15 @@ Las pruebas no necesitan PostgreSQL ni User Secrets: usan su propia configuraci�
 
 1. `cd backend\ClimaPlus.Api` y luego `dotnet run --launch-profile https` (si el navegador rechaza el certificado, ejecuta una vez `dotnet dev-certs https --trust`).
 2. Abrir `https://localhost:7060/swagger`.
-3. Ejecutar `POST /api/auth/register` y `POST /api/auth/login`; copiar el token en el botón **Authorize**.
-4. Probar `GET /api/usuarios/me`, `PUT /api/usuarios/me` y `PUT /api/usuarios/me/password`.
+3. Los códigos de verificación llegan por correo. En local, levanta Mailpit (`docker run -d --name mailpit -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 axllent/mailpit:v1.33.1`) y configura una sola vez:
+   `dotnet user-secrets set "Correo:Host" "localhost"`, `dotnet user-secrets set "Correo:Puerto" "1025"`, `dotnet user-secrets set "Correo:Seguridad" "Ninguna"` y `dotnet user-secrets set "Correo:Remitente" "no-reply@climaplus.local"`. Los correos se leen en `http://localhost:8025`.
+   Ejecutar `POST /api/auth/register` y `POST /api/auth/verificar-correo` con el código; luego `POST /api/auth/login` (paso 1, devuelve el desafío) y `POST /api/auth/login/verificar` con el código nuevo (paso 2, devuelve el token). Copiar el token en el botón **Authorize**.
+4. Probar `GET /api/usuarios/me`, `PUT /api/usuarios/me` y el cambio de contraseña con código (`POST /api/usuarios/me/password/cambio` y `/cambio/verificar`; el antiguo `PUT /api/usuarios/me/password` se eliminó en la migración 005).
 5. En psql, comprobar que la contraseña está hasheada:
    `SELECT id_usuario, correo, rol, activo, left(password_hash, 10) AS hash_inicio FROM usuario ORDER BY id_usuario DESC LIMIT 5;`
 6. Revisar la consola: deben aparecer eventos `Seguridad:` sin contraseñas ni tokens.
 
 También puedes usar `backend\ClimaPlus.Api\ClimaPlus.Api.http` desde Visual Studio o VS Code.
+
+Para la autenticación segura (registro con código, login en dos pasos, recuperación y cambio de contraseña) sigue
+la guía [`pruebas-autenticacion-postman-mailpit.md`](pruebas-autenticacion-postman-mailpit.md).

@@ -46,7 +46,8 @@ docker compose ps
 | API | http://localhost:8080 |
 | Salud de la API | http://localhost:8080/health → `Healthy` |
 
-- La **primera vez**, PostgreSQL ejecuta automáticamente `database/migrations/001`, `002` y `003`.
+- La **primera vez**, PostgreSQL ejecuta automáticamente `database/migrations/001` a `005`. Con un volumen que ya
+  existía, la 004 y la 005 se aplican a mano ([`migracion-005.md`](migracion-005.md), sección 8).
 - Los datos quedan en el volumen `climaplus_datos-postgres` y sobreviven a `docker compose down`.
 - `docker compose down -v` **borra** la base de datos de Docker (no toca tu PostgreSQL local ni `climaplus_db`).
 - Registros: `docker compose logs -f api`.
@@ -120,11 +121,27 @@ Sirve cualquier VPS o máquina con Linux y Docker (por ejemplo una VM de la univ
 
 ### Respaldo de la base de datos
 
+El respaldo se genera **dentro** del contenedor y se copia con `docker compose cp`. No redirijas la salida con `>`:
+sin `-T` la terminal convierte los saltos de línea y en Windows PowerShell 5.1 `>` recodifica el archivo; en ambos
+casos el respaldo binario queda inservible.
+
 ```bash
-docker compose exec db pg_dump -U climaplus -d climaplus_db -Fc > respaldo-$(date +%F).dump
-# Restaurar en una base vacía:
-docker compose exec -T db pg_restore -U climaplus -d climaplus_db --clean < respaldo-AAAA-MM-DD.dump
+docker compose exec -T db pg_dump -U climaplus -d climaplus_db -Fc -f /tmp/respaldo.dump
+docker compose cp db:/tmp/respaldo.dump ./respaldo-$(date +%F).dump          # PowerShell: .\respaldo-AAAA-MM-DD.dump
+docker compose exec -T db rm /tmp/respaldo.dump
+
+# Restaurar (API detenida): copiar el archivo al contenedor y restaurar sobre la base
+docker compose stop api
+docker compose cp ./respaldo-AAAA-MM-DD.dump db:/tmp/restaurar.dump
+docker compose exec -T db pg_restore -U climaplus -d climaplus_db --clean --if-exists --no-owner /tmp/restaurar.dump
+docker compose start api
 ```
+
+Prueba la restauración de vez en cuando en una base aparte (`createdb` dentro del contenedor) antes de necesitarla.
+Procedimiento completo para la migración 004: [`migracion-004-climaplus_db.md`](migracion-004-climaplus_db.md).
+Migración 005 (cambio de contraseña con código): [`migracion-005.md`](migracion-005.md).
+Despliegue en la VM de Azure: con Docker Compose (recomendado) [`azure-docker.md`](azure-docker.md); sin Docker (Nginx + systemd) [`azure-vm.md`](azure-vm.md). Lista de comprobación para
+poner ClimaPlus en el equipo de destino: [`preparacion-despliegue.md`](preparacion-despliegue.md).
 
 ## 5. Seguridad del despliegue (continuación de la Fase 8)
 

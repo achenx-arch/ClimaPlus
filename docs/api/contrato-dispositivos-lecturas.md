@@ -44,7 +44,7 @@ Pruebas: 488 aprobadas, 0 omitidas, 0 fallidas en Linux con PostgreSQL 16 (400 a
 }
 ```
 
-- `enLinea` (DP-F7-1): `true` si la última lectura llegó hace **5 minutos o menos**. El firmware envía una por minuto.
+- `enLinea` (DP-F7-1): `true` si la última lectura llegó hace **5 minutos o menos**. El firmware oficial envía una cada 10 segundos.
 - `ultimaConexion` y `ultimaLectura` son `null` si el dispositivo nunca envió datos ("Nunca conectado" en M11).
 - Nunca incluye la API Key ni su hash.
 
@@ -55,7 +55,7 @@ Cuerpo: `{ "nombre": "ESP32 Patio", "idUbicacion": 4 }` → **201**, cabecera `C
 ```json
 {
   "dispositivo": { "...": "objeto Dispositivo" },
-  "apiKey": "cpk_4RtzoMHR1XQiptshJCIBdEDyIRC_3qdRtmSpAN5GlS4",
+  "apiKey": "cpk_EJEMPLO_NO_ES_UNA_CLAVE_REAL",
   "aviso": "Guárdala ahora; no podrás verla de nuevo. Si la pierdes, registra el dispositivo otra vez."
 }
 ```
@@ -130,7 +130,7 @@ La API Key nunca se escribe en los logs; los rechazos se registran como `Segurid
 
 ## Prueba manual sin hardware (PowerShell)
 
-1. Inicia sesión en Swagger (`/api/auth/login`), pulsa **Authorize** y pega el token en **Bearer**.
+1. Inicia sesión en Swagger en dos pasos (`/api/auth/login` y luego `/api/auth/login/verificar` con el código del correo), pulsa **Authorize** y pega el token en **Bearer**.
 2. `POST /api/dispositivos` con un `idUbicacion` existente. Copia el `apiKey` de la respuesta.
 3. Simula al ESP32:
 
@@ -145,9 +145,11 @@ También se puede desde Swagger: **Authorize** → `DeviceKey` → pegar la clav
 
 ## Firmware
 
-El firmware del ESP32 está en [`hardware/esp32`](../../hardware/esp32/README.md): materiales, conexiones,
-configuración de `secrets.h` (WiFi, `API_URL` y `DEVICE_KEY`), cómo exponer la API en la red local y simulación en
-Wokwi. Envía una lectura por minuto y usa `alertasGeneradas` para el LED rojo y el buzzer.
+El firmware oficial es la versión **ESP32 DevKit con LCD** (DHT11, LDR, sensor de lluvia, LCD 16x2 I2C, buzzer,
+botón y LED rojo, verde y amarillo), en [`hardware/esp32`](../../hardware/esp32/README.md): componentes, conexiones,
+configuración de `secrets.h` (WiFi, `API_URL` y `DEVICE_KEY`) y cómo exponer la API en la red local. Envía una
+lectura cada 10 segundos y usa `alertasGeneradas` para el LED rojo, el buzzer y el mensaje en el LCD. Auditoría del
+firmware y pruebas del dispositivo: [`../hardware/plan-integracion-esp32.md`](../hardware/plan-integracion-esp32.md).
 
 ## Decisiones de esta fase
 
